@@ -5,12 +5,10 @@
 <img width="1920" height="1000" alt="スクリーンショット 2026-04-16 191718-e" src="https://github.com/user-attachments/assets/f6c86e6b-2ad5-4b5f-bfa8-6ff66fcaf43b" />
 
 ## おしらせ
-バージョン1.0.3から、BepInEx6にも対応しました！！  
-今までのBepInEx5版もひきつづき開発します！！  
-また、下で紹介している導入方法はBepInEx5のものになります！ご了承ください～  
+**DLC完全対応！**
 
 ## 対応バージョン(MODバージョンv1.0.8.1現在)
-- ゲームバージョン1.0.2のみ対応  
+- ゲームバージョン1.0.2および1.0.3のみ対応  
 
 ## 機能
 - 内部解像度を指定することで画質を向上することができる。
@@ -37,12 +35,12 @@
 
 2. [BepInEx5](https://github.com/bepinex/bepinex/releases)をダウンロードする。Windowsの場合もSteam Deckの場合も```BepInEx_win_x64_{バージョン名}.zip```をダウンロードする。
 
-3. ゲームのexeがあるディレクトリにBepInEx5の中身を展開。つまり、ゲームのexeとBepInExフォルダやdoorstop_configとかが同じ階層にある状態が正しいということ。
+3. ゲームのexeがあるディレクトリにBepInEx5のZipの中身を全て展開。フォルダ以外のファイルもお忘れなく。つまり、ゲームのexeとBepInExフォルダやdoorstop_configとかが同じ階層にある状態が正しいということ。
 <img width="1535" height="1069" alt="image" src="https://github.com/user-attachments/assets/3a1985df-6f79-4c7d-9a66-31ca5ffa312a" />  
 
 4. (Steam Deckの場合のみ実行) Steamでバニーガーデン2 → 右クリック → 「プロパティ」→「一般」→「起動オプション」に```WINEDLLOVERRIDES="winhttp=n,b" %command%```を入力。
 
-5. 一度ゲームを起動した後、[Releases](https://github.com/kazumasa200/BunnyGarden2FixMod/releases/latest)からダウンロードしたZipを展開し、中にある```net.noeleve.BunnyGarden2FixMod.dll```をBepinExフォルダの中のPluginsの中に入れる。
+5. 一度Steamのプレイボタンからゲームを起動した後、[Releases](https://github.com/kazumasa200/BunnyGarden2FixMod/releases/latest)からダウンロードしたZipを展開し、中にある```net.noeleve.BunnyGarden2FixMod.dll```をBepinExフォルダの中のPluginsの中に入れる。
 <img width="1490" height="383" alt="image" src="https://github.com/user-attachments/assets/f24310e1-c5f1-4a08-9195-b25d0fe37377" />
 
 6. もう一度起動するとBepinExフォルダの中のconfigフォルダに```net.noeleve.BunnyGarden2FixMod.cfg```設定ファイルが出来上がるので、それをメモ帳などで変更して解像度の設定やフレームレートなどの設定をする。
@@ -65,6 +63,7 @@
 ## 開発者向け: Config / ホットキーの追加方法
 <details>
 <summary>開発者向け詳細</summary>
+  
 新しい設定項目は [`BunnyGarden2FixMod/Configs.yaml`](BunnyGarden2FixMod/Configs.yaml) に 1 ブロック書くだけで追加できます。`tools/ConfigGen` がビルド時に YAML を読んで [`Generated/Configs.g.cs`](BunnyGarden2FixMod/Generated/Configs.g.cs) を再生成し、`Plugin.Awake` から `Configs.BindAll(Config)` で BepInEx に Bind されます（F9 パネルへの行追加もメタデータ経由で自動）。
 
 ### Config エントリの追加

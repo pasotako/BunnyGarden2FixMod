@@ -98,6 +98,13 @@ public class UITButton : VisualElement
         return this;
     }
 
+    /// <summary>ボタンのラベルテキストを動的に書き換える（キャプチャ状態表示等に使用）。</summary>
+    public void SetText(string text)
+    {
+        // m_label は BuildBase() で生成した内部 Label。null チェックは念のため。
+        if (m_label != null) m_label.text = text;
+    }
+
     /// <summary>ボタンの幅を固定する（0 以下なら可変に戻す）。</summary>
     public UITButton SetWidth(float width)
     {

@@ -3,14 +3,17 @@
 // 別アセンブリに切り出す場合は public 化または InternalsVisibleTo の追加が必要。
 using System;
 using BepInEx.Configuration;
+using BunnyGarden2FixMod.Utils;
 
 namespace BunnyGarden2FixMod.Patches.Settings;
 
-/// <summary>F9 パネルでの行表示種別。enum 設定の dropdown 等は v1 範囲外。</summary>
+/// <summary>F9 パネルでの行表示種別。</summary>
 public enum UIKind
 {
     Toggle,
     Slider,
+    Dropdown,
+    KeyBinding,
 }
 
 /// <summary>
@@ -20,7 +23,6 @@ public enum UIKind
 public class UIEntryMeta
 {
     public string Category;
-    public int Order;
     public string Label;
     public string Desc;          // 任意。v2 以降で使用予定。Phase 2 では null 可。
     public UIKind Kind;
@@ -30,6 +32,16 @@ public class UIEntryMeta
     public float SliderMax;
     public float SliderStep;
     public string Format;        // string.Format スタイル。例: "{0:F2}", "{0} fps"
+
+    // Dropdown 用（他 Kind 時は null）。
+    // EnumAccessor<T> 内の Enum.GetValues 順序と index を一致させること。
+    // codegen は Enum.GetNames(typeof(T)) を出力するため自動一致する。
+    public string[] DropdownOptions;
+
+    // KeyBinding 用 (他 Kind 時は null)。
+    // HotkeyConfig はキー (KeyConfig) と Pad ボタン (ButtonConfig) の 2 ConfigEntry を保持する。
+    // 値変更は HotkeyProvider().KeyConfig.Value / .ButtonConfig.Value への直接代入で行う。
+    public Func<global::BunnyGarden2FixMod.Utils.HotkeyConfig> HotkeyProvider;
 
     public IConfigAccessor Accessor;
 }
@@ -110,5 +122,48 @@ internal sealed class FloatAccessor : IConfigAccessor
     {
         var e = _entry();
         e.Value = (float)((ConfigEntryBase)e).DefaultValue;
+    }
+}
+
+/// <summary>
+/// enum ConfigEntry を「Enum.GetValues 上の index」として float でラップする。
+/// underlying value をそのまま使うと sparse / 明示値 enum で UI index と食い違うため、
+/// 必ず Array.IndexOf で正規化する。
+/// </summary>
+internal sealed class EnumAccessor<T> : IConfigAccessor where T : struct, Enum
+{
+    // Enum.GetNames と Enum.GetValues は同一順序（共に underlying value 昇順）で返す。
+    // ConfigGen が DropdownOptions に渡す Enum.GetNames とこの GetValues の index が一致する根拠。
+    private static readonly Array s_values = Enum.GetValues(typeof(T));
+    private readonly Func<ConfigEntry<T>> _entry;
+    public EnumAccessor(Func<ConfigEntry<T>> entry) { _entry = entry; }
+
+    public float GetFloat()
+    {
+        var value = _entry().Value;
+        var idx = Array.IndexOf(s_values, value);
+        if (idx < 0)
+        {
+            // .cfg を手編集して未知の値を入れた場合や [Flags] 合成値の場合に発生。
+            // 黙って先頭メンバへフォールバックすると勝手に書き換わったように見えるためログを残す。
+            PatchLogger.LogWarning($"[EnumAccessor<{typeof(T).Name}>] 不明な値 '{value}' を検出、UI 上は先頭メンバへフォールバック");
+            return 0f;
+        }
+        return idx;
+    }
+
+    public void SetFloat(float v)
+    {
+        if (s_values.Length == 0) return;
+        var idx = (int)Math.Round(v);
+        if (idx < 0) idx = 0;
+        if (idx >= s_values.Length) idx = s_values.Length - 1;
+        _entry().Value = (T)s_values.GetValue(idx);
+    }
+
+    public void ResetToDefault()
+    {
+        var e = _entry();
+        e.Value = (T)(object)((ConfigEntryBase)e).DefaultValue;
     }
 }

@@ -13,7 +13,7 @@ namespace BunnyGarden2FixMod.Patches.Settings;
 /// <summary>
 /// F9 設定パネルのビュー。
 /// サイドバー（カテゴリ一覧） + コンテンツ（選択カテゴリの行群）の 2 カラム構成。
-/// Configs.UIEntries を foreach して UITSwitch / UITSlider 行を生成する。
+/// Configs.UIEntries を foreach して UITSwitch / UITSlider / UITDropdown 行を生成する。
 /// </summary>
 public class SettingsView : MonoBehaviour
 {
@@ -31,6 +31,9 @@ public class SettingsView : MonoBehaviour
     private int m_selectedRowIndex = 0;
     private readonly List<RowHandle> m_currentRows = new();
 
+    // キャプチャ中ヒント表示用 Label（BuildPanel で生成、非表示で待機）
+    private Label m_captureHintLabel;
+
     // 自前 tooltip 用フィールド（Unity UI Toolkit の tooltip プロパティは BepInEx ランタイムで表示されない）
     private Label m_tooltipLabel;
     private IVisualElementScheduledItem m_tooltipShowTimer;
@@ -42,8 +45,11 @@ public class SettingsView : MonoBehaviour
     {
         public UIEntryMeta Entry;
         public VisualElement Row;
-        public UITSwitch Switch;   // Toggle のときのみ非 null
-        public UITSlider Slider;   // Slider のときのみ非 null
+        public UITSwitch Switch;       // Toggle のときのみ非 null
+        public UITSlider Slider;       // Slider のときのみ非 null
+        public UITDropdown Dropdown;   // Dropdown のときのみ非 null
+        public UITButton KeyCapBtn;    // KeyBinding の KB 側のみ非 null
+        public UITDropdown PadDropdown;// KeyBinding の Pad 側のみ非 null
     }
 
     private void Awake()
@@ -164,6 +170,28 @@ public class SettingsView : MonoBehaviour
             }
         }, TrickleDown.TrickleDown);
 
+        // キャプチャ中にパネル内の別の場所をクリックしたらキャプチャを解除する。
+        // TrickleDown で子要素の ClickEvent より先に拾い、StartKeyCapture の再入ガードと二重防御する。
+        // ただし現在キャプチャ中のボタン自身またはその祖先がクリックされた場合は解除しない。
+        m_root.RegisterCallback<MouseDownEvent>(evt =>
+        {
+            var ctrl = SettingsController.Instance;
+            if (ctrl == null || !ctrl.IsCapturingKey) return;
+            // 現在キャプチャ中の KeyCapBtn を特定する
+            var activeBtn = FindKeyCapBtn(ctrl.CapturingEntry);
+            // クリック対象が activeBtn またはその子孫の場合は解除しない
+            if (activeBtn != null && evt.target is VisualElement ve)
+            {
+                var node = ve;
+                while (node != null)
+                {
+                    if (ReferenceEquals(node, activeBtn)) return;
+                    node = node.parent;
+                }
+            }
+            ctrl.CancelKeyCapture();
+        }, TrickleDown.TrickleDown);
+
         // 自前 tooltip 用のフローティング Label を m_root に追加する。
         // Unity UI Toolkit の `tooltip` プロパティは BepInEx ランタイムでは表示されないことがあるため、
         // MouseEnter / Leave イベントで自前管理する。
@@ -187,6 +215,20 @@ public class SettingsView : MonoBehaviour
         m_tooltipLabel.pickingMode = PickingMode.Ignore;
         if (m_font != null) m_tooltipLabel.style.unityFont = m_font;
         m_root.Add(m_tooltipLabel);
+
+        // キャプチャ中ヒント: パネル下端に固定表示。StartKeyCapture で表示、解除時に非表示。
+        m_captureHintLabel = new Label("任意のキーを押してください  Esc=キャンセル / BS,Del=未割当");
+        m_captureHintLabel.style.color = new Color(1f, 0.85f, 0.4f, 1f); // 黄色系ヒント色
+        m_captureHintLabel.style.fontSize = 10;
+        m_captureHintLabel.style.paddingTop = 4;
+        m_captureHintLabel.style.paddingBottom = 4;
+        m_captureHintLabel.style.paddingLeft = 12;
+        m_captureHintLabel.style.paddingRight = 12;
+        m_captureHintLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+        m_captureHintLabel.style.backgroundColor = new Color(0.094f, 0.110f, 0.153f, 1f); // sidebar と同色
+        m_captureHintLabel.style.display = DisplayStyle.None;
+        if (m_font != null) m_captureHintLabel.style.unityFont = m_font;
+        m_root.Add(m_captureHintLabel);
 
         BuildSidebar();
         RenderContent();
@@ -291,6 +333,7 @@ public class SettingsView : MonoBehaviour
     public void SelectCategory(int index)
     {
         if (index < 0 || index >= m_categories.Count) return;
+        SettingsController.Instance?.CancelKeyCapture(); // カテゴリ切替時はキャプチャ状態を解除
         m_selectedCategoryIndex = index;
         m_selectedRowIndex = 0;
         ApplySidebarHighlight();
@@ -299,6 +342,16 @@ public class SettingsView : MonoBehaviour
 
     private void RenderContent()
     {
+        // RenderContent はキャプチャ確定からも呼ばれるが、CancelKeyCapture は冪等のため
+        // ここでは呼ばない。別経路 (SelectCategory / ResetCurrentCategory / Hide) がキャンセル済み。
+
+        // 旧行が dropdown / PadDropdown を開いていた場合、Clear する前にポップアップ overlay を回収する
+        // （ポップアップは row 階層ではなく panel.visualTree 直下に挿入されているため）。
+        foreach (var h in m_currentRows)
+        {
+            if (h.Dropdown != null && h.Dropdown.IsPopupOpen) h.Dropdown.ClosePopup();
+            if (h.PadDropdown != null && h.PadDropdown.IsPopupOpen) h.PadDropdown.ClosePopup();
+        }
         m_content.Clear();
         m_currentRows.Clear();
         // カテゴリ切替時に残留 tooltip を非表示にする
@@ -308,17 +361,17 @@ public class SettingsView : MonoBehaviour
         var category = m_categories[m_selectedCategoryIndex];
 
         // ── 行 ──────────────────────────────────────
+        // YAML 宣言順 (= UIEntries の配列順) がそのままカテゴリ内表示順になる。
         var entries = Configs.UIEntries
             .Where(e => e.Category == category)
-            .OrderBy(e => e.Order)
             .ToList();
 
         for (int i = 0; i < entries.Count; i++)
         {
             var entry = entries[i];
-            var (row, sw, sl) = BuildRow(entry);
-            m_content.Add(row);
-            m_currentRows.Add(new RowHandle { Entry = entry, Row = row, Switch = sw, Slider = sl });
+            var handle = BuildRow(entry);
+            m_content.Add(handle.Row);
+            m_currentRows.Add(handle);
         }
         ApplyRowHighlight();
 
@@ -335,16 +388,35 @@ public class SettingsView : MonoBehaviour
     private void ResetCurrentCategory()
     {
         if (m_categories == null || m_categories.Count == 0) return;
+        // キャプチャ中に「初期値に戻す」が押されてもキャプチャ状態が残ると stale entry を指すため明示的にキャンセル。
+        SettingsController.Instance?.CancelKeyCapture();
         var category = m_categories[m_selectedCategoryIndex];
         foreach (var entry in Configs.UIEntries.Where(e => e.Category == category))
         {
-            entry.Accessor.ResetToDefault();
+            if (entry.Kind == UIKind.KeyBinding)
+            {
+                var hotkey = entry.HotkeyProvider?.Invoke();
+                if (hotkey?.KeyConfig != null)
+                {
+                    var def = (UnityEngine.InputSystem.Key)((BepInEx.Configuration.ConfigEntryBase)hotkey.KeyConfig).DefaultValue;
+                    hotkey.KeyConfig.Value = def;
+                }
+                if (hotkey?.ButtonConfig != null)
+                {
+                    var def = (ControllerButton)((BepInEx.Configuration.ConfigEntryBase)hotkey.ButtonConfig).DefaultValue;
+                    hotkey.ButtonConfig.Value = def;
+                }
+            }
+            else
+            {
+                entry.Accessor.ResetToDefault();
+            }
         }
         // 新しい値を UI に反映するため再描画
         RenderContent();
     }
 
-    private (VisualElement row, UITSwitch sw, UITSlider sl) BuildRow(UIEntryMeta entry)
+    private RowHandle BuildRow(UIEntryMeta entry)
     {
         var row = new VisualElement();
         row.style.flexDirection = FlexDirection.Row;
@@ -391,7 +463,80 @@ public class SettingsView : MonoBehaviour
             // なので、target が row 自身のときだけ拾うことで二重 toggle を防ぐ。
             row.RegisterCallback<ClickEvent>(evt => { if (evt.target == row) sw.Toggle(); });
             row.Add(sw);
-            return (row, sw, null);
+            return new RowHandle { Entry = entry, Row = row, Switch = sw };
+        }
+        else if (entry.Kind == UIKind.Dropdown)
+        {
+            var dd = new UITDropdown();
+            dd.Setup(entry.Label, entry.DropdownOptions, m_font);
+            // EnumAccessor.GetFloat() は Enum.GetValues 上の index を返す。
+            dd.SetIndex((int)Math.Round(entry.Accessor.GetFloat()));
+            dd.OnValueChanged += i => entry.Accessor.SetFloat(i);
+            // row 余白クリックでもポップアップを開けるようにする（ボタン外側帯のクリックを取りこぼさない）。
+            row.RegisterCallback<ClickEvent>(evt => { if (evt.target == row) dd.TogglePopup(); });
+            row.Add(dd);
+            return new RowHandle { Entry = entry, Row = row, Dropdown = dd };
+        }
+        else if (entry.Kind == UIKind.KeyBinding)
+        {
+            // ── ラベル ──
+            var label = new Label(entry.Label);
+            label.style.color = new Color(0.84f, 0.87f, 0.91f, 1f);
+            label.style.fontSize = 11;
+            label.style.flexGrow = 1;
+            label.style.whiteSpace = WhiteSpace.NoWrap;
+            label.style.overflow = Overflow.Hidden;
+            if (m_font != null) label.style.unityFont = m_font;
+            row.Add(label);
+
+            var hotkey = entry.HotkeyProvider?.Invoke();
+            if (hotkey == null)
+            {
+                PatchLogger.LogWarning($"[SettingsView] KeyBinding 行 '{entry.Label}' の HotkeyProvider が null のためスキップ");
+                return new RowHandle { Entry = entry, Row = row };
+            }
+
+            // ── KB 側ボタン（クリックでキャプチャ開始）幅 50px 固定 ──
+            var kbBtn = new UITButton();
+            var kbText = FormatKeyText(hotkey.KeyConfig?.Value);
+            kbBtn.Setup(kbText, () => SettingsController.Instance?.StartKeyCapture(entry), m_font);
+            kbBtn.SetVariant(UITButton.Variant.Subtle);
+            kbBtn.SetWidth(50);
+            kbBtn.style.flexGrow = 0;
+            kbBtn.style.flexShrink = 0;
+            kbBtn.style.marginLeft = 4;
+            // 内部 label の fontSize を縮小して "Backspace" 等の長テキストを収める。
+            // 50px に収まらない場合は ellipsis で末尾省略（"Backspace" は "Backsp..." 等になり得る）。
+            var kbInnerLabel = kbBtn.Q<Label>();
+            if (kbInnerLabel != null)
+            {
+                kbInnerLabel.style.fontSize = 9;
+                kbInnerLabel.style.whiteSpace = WhiteSpace.NoWrap;
+                kbInnerLabel.style.overflow = Overflow.Hidden;
+                kbInnerLabel.style.textOverflow = TextOverflow.Ellipsis;
+            }
+            row.Add(kbBtn);
+
+            // ── 区切り "/" ──
+            var sep = new Label("/");
+            sep.style.color = new Color(0.5f, 0.55f, 0.65f, 1f);
+            sep.style.fontSize = 11;
+            sep.style.marginLeft = 4;
+            sep.style.marginRight = 4;
+            if (m_font != null) sep.style.unityFont = m_font;
+            row.Add(sep);
+
+            // ── Pad 側 dropdown 幅 50px 固定 ──
+            var padDd = new UITDropdown();
+            padDd.Setup(string.Empty, entry.DropdownOptions, m_font);
+            int padIdx = ResolvePadIndex(entry.DropdownOptions, hotkey.ButtonConfig?.Value);
+            padDd.SetIndex(padIdx);
+            padDd.OnValueChanged += i => OnPadChanged(entry, i);
+            padDd.SetWidth(50);
+            padDd.SetButtonFontSize(9);
+            row.Add(padDd);
+
+            return new RowHandle { Entry = entry, Row = row, KeyCapBtn = kbBtn, PadDropdown = padDd };
         }
         else
         {
@@ -409,7 +554,7 @@ public class SettingsView : MonoBehaviour
             sl.SetStep(entry.SliderStep);
             sl.OnValueChanged += v => entry.Accessor.SetFloat(v);
             row.Add(sl);
-            return (row, null, sl);
+            return new RowHandle { Entry = entry, Row = row, Slider = sl };
         }
     }
 
@@ -441,6 +586,15 @@ public class SettingsView : MonoBehaviour
     public void Hide()
     {
         if (m_root == null) return;
+        // キャプチャ中にパネルが閉じられた場合は状態をリセット（再表示時のフラグ残留を防ぐ）
+        SettingsController.Instance?.CancelKeyCapture();
+        // 開いている dropdown / PadDropdown ポップアップは panel.visualTree 直下にあるため、
+        // パネル display を None にしても残ることがある。明示的に閉じる。
+        foreach (var h in m_currentRows)
+        {
+            if (h.Dropdown != null && h.Dropdown.IsPopupOpen) h.Dropdown.ClosePopup();
+            if (h.PadDropdown != null && h.PadDropdown.IsPopupOpen) h.PadDropdown.ClosePopup();
+        }
         m_root.style.display = DisplayStyle.None;
     }
 
@@ -475,28 +629,34 @@ public class SettingsView : MonoBehaviour
     {
         if (m_selectedRowIndex < 0 || m_selectedRowIndex >= m_currentRows.Count) return;
         var h = m_currentRows[m_selectedRowIndex];
-        if (h.Slider != null)      NudgeSelectedSlider(shift ? -10 : -1);
-        else if (h.Switch != null) h.Switch.SetValue(false);
+        if (h.Slider != null)        NudgeSelectedSlider(shift ? -10 : -1);
+        else if (h.Dropdown != null) h.Dropdown.Cycle(-1); // shift は無視（要素数が少ないため）
+        else if (h.Switch != null)   h.Switch.SetValue(false);
     }
 
     public void HandleKeyArrowRight(bool shift)
     {
         if (m_selectedRowIndex < 0 || m_selectedRowIndex >= m_currentRows.Count) return;
         var h = m_currentRows[m_selectedRowIndex];
-        if (h.Slider != null)      NudgeSelectedSlider(shift ? +10 : +1);
-        else if (h.Switch != null) h.Switch.SetValue(true);
+        if (h.Slider != null)        NudgeSelectedSlider(shift ? +10 : +1);
+        else if (h.Dropdown != null) h.Dropdown.Cycle(+1);
+        else if (h.Switch != null)   h.Switch.SetValue(true);
     }
 
     public void HandleKeyConfirm()
     {
         if (m_selectedRowIndex < 0 || m_selectedRowIndex >= m_currentRows.Count) return;
         var h = m_currentRows[m_selectedRowIndex];
-        if (h.Switch != null) h.Switch.Toggle();
+        if (h.Switch != null)             h.Switch.Toggle();
+        else if (h.Dropdown != null)      h.Dropdown.Cycle(+1);
+        else if (h.KeyCapBtn != null)     SettingsController.Instance?.StartKeyCapture(h.Entry); // Space/Enter で KB キャプチャ開始
+        // KeyBinding 行の Slider は null のため HandleKeyArrowLeft/Right も自然に何もしない
     }
 
     public void HandleKeyTabNext()
     {
         if (m_categories == null || m_categories.Count == 0) return;
+        SettingsController.Instance?.CancelKeyCapture(); // Tab でカテゴリ移動時はキャプチャを解除
         m_selectedCategoryIndex = (m_selectedCategoryIndex + 1) % m_categories.Count;
         m_selectedRowIndex = 0;
         ApplySidebarHighlight();
@@ -506,6 +666,7 @@ public class SettingsView : MonoBehaviour
     public void HandleKeyTabPrev()
     {
         if (m_categories == null || m_categories.Count == 0) return;
+        SettingsController.Instance?.CancelKeyCapture(); // Shift+Tab でカテゴリ移動時はキャプチャを解除
         m_selectedCategoryIndex = (m_selectedCategoryIndex - 1 + m_categories.Count) % m_categories.Count;
         m_selectedRowIndex = 0;
         ApplySidebarHighlight();
@@ -528,5 +689,107 @@ public class SettingsView : MonoBehaviour
         entry.Accessor.SetFloat(next);
         // step snap 後の最終値で UI を同期（イベント抑制付き SetValue）
         h.Slider.SetValue(entry.Accessor.GetFloat());
+    }
+
+    // ── Controller から呼ばれる UI 操作 API ──────────────────────────────────
+
+    /// <summary>キャプチャ開始時に Controller から呼ばれる UI 反映。</summary>
+    public void OnCaptureStarted(UIEntryMeta entry)
+    {
+        if (entry == null) return;
+        var btn = FindKeyCapBtn(entry);
+        if (btn != null) btn.SetText("...");
+        // キャプチャ開始時にヒントを表示する
+        if (m_captureHintLabel != null) m_captureHintLabel.style.display = DisplayStyle.Flex;
+    }
+
+    /// <summary>キャプチャ終了時に Controller から呼ばれる UI 反映 (Cancel / Confirm 共通)。</summary>
+    public void OnCaptureEnded(UIEntryMeta entry)
+    {
+        if (entry != null)
+        {
+            var btn = FindKeyCapBtn(entry);
+            if (btn != null)
+            {
+                var hotkey = entry.HotkeyProvider?.Invoke();
+                btn.SetText(FormatKeyText(hotkey?.KeyConfig?.Value));
+            }
+        }
+        // キャプチャ解除時にヒントを非表示にする
+        if (m_captureHintLabel != null) m_captureHintLabel.style.display = DisplayStyle.None;
+    }
+
+    /// <summary>HandleCapturedKey 確定後に Controller から呼ばれる: 行を再描画して新値を反映。</summary>
+    public void RequestRebuild()
+    {
+        // RenderContent はイベント発火中の VisualElement 破棄を避けるため次フレームに遅延する。
+        m_root?.schedule.Execute(RenderContent).StartingIn(0);
+    }
+
+    // ── KeyBinding ヘルパ ──────────────────────────
+
+    /// <summary>指定エントリに対応する KeyCapBtn を m_currentRows から検索する。</summary>
+    private UITButton FindKeyCapBtn(UIEntryMeta entry)
+    {
+        if (entry == null) return null;
+        foreach (var h in m_currentRows)
+        {
+            if (ReferenceEquals(h.Entry, entry)) return h.KeyCapBtn;
+        }
+        return null;
+    }
+
+    /// <summary>Key 値をボタン表示用テキストに変換する。None は "Unbound"。</summary>
+    private static string FormatKeyText(UnityEngine.InputSystem.Key? key)
+    {
+        if (key == null || key.Value == UnityEngine.InputSystem.Key.None) return "Unbound";
+        return key.Value.ToString();
+    }
+
+    /// <summary>ControllerButton 値を DropdownOptions 配列の index に変換する。見つからない場合は 0。</summary>
+    private static int ResolvePadIndex(string[] options, ControllerButton? value)
+    {
+        if (options == null || options.Length == 0) return 0;
+        if (value == null) return 0;
+        var name = value.Value.ToString();
+        for (int i = 0; i < options.Length; i++)
+        {
+            if (options[i] == name) return i;
+        }
+        return 0;
+    }
+
+    /// <summary>Pad ドロップダウン変更時の処理。衝突時はスワップして次フレームに再描画。</summary>
+    private void OnPadChanged(UIEntryMeta entry, int newIndex)
+    {
+        var hotkey = entry.HotkeyProvider?.Invoke();
+        if (hotkey?.ButtonConfig == null) return;
+        if (newIndex < 0 || entry.DropdownOptions == null || newIndex >= entry.DropdownOptions.Length) return;
+        if (!System.Enum.TryParse<ControllerButton>(entry.DropdownOptions[newIndex], out var newBtn)) return;
+
+        var oldBtn = hotkey.ButtonConfig.Value;
+        if (oldBtn == newBtn) return;
+        hotkey.ButtonConfig.Value = newBtn;
+
+        // 衝突スワップ
+        if (newBtn != ControllerButton.None)
+        {
+            foreach (var other in Configs.UIEntries)
+            {
+                if (other.Kind != UIKind.KeyBinding) continue;
+                if (ReferenceEquals(other, entry)) continue;
+                var otherHk = other.HotkeyProvider?.Invoke();
+                if (otherHk?.ButtonConfig == null) continue;
+                if (otherHk.ButtonConfig.Value == newBtn)
+                {
+                    otherHk.ButtonConfig.Value = oldBtn;
+                    PatchLogger.LogInfo($"[SettingsView] Pad 衝突: '{other.Label}' を {newBtn}→{oldBtn} にスワップ");
+                }
+            }
+        }
+
+        // UITDropdown の OnValueChanged 発火中に RenderContent で popup を破棄すると
+        // 例外/popup 残留の懸念があるため、次フレームへ遅延する。
+        m_root?.schedule.Execute(RenderContent).StartingIn(0);
     }
 }

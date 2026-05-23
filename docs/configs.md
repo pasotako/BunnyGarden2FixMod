@@ -31,10 +31,7 @@
 | `SlowSpeed` | `0.5` | フリーカメラの低速移動速度 (Ctrl 押下中) |
 | `HideGameUiInFreeCam` | `true` | フリーカメラ起動中にゲーム本体の Canvas を非表示 |
 | `ControllerEnabled` | `true` | フリーカメラ操作にゲームパッド入力を使用 |
-| `ToggleFreeCamKey` | `F5` | フリーカメラ ON/OFFのキーボードキー |
-| `ToggleFreeCamButton` | `Y` | フリーカメラ ON/OFFのボタン<br>ControllerModifier と同時押しが必要です。 |
-| `ToggleFixedFreeCamKey` | `F6` | 固定フリーカメラ ON/OFFのキーボードキー<br>フリーカメラ起動中にカメラ位置を固定します。フリーカメラ起動中のみ有効。 |
-| `ToggleFixedFreeCamButton` | `X` | 固定フリーカメラ ON/OFFのボタン<br>フリーカメラ起動中にカメラ位置を固定します。フリーカメラ起動中のみ有効。<br>ControllerModifier と同時押しが必要です。 |
+| `FreeCamDisplayMode` | `MainScreen` | フリーカメラの出力先<br>フリーカメラの映像をどこに表示するかを選択します。<br>排他的フルスクリーンモードの場合は、MainScreen が使用されます。<br>MainScreen: メイン画面（通常のフリーカメラ）<br>PiP: ピクチャー・イン・ピクチャー<br>Display2: サブモニター（モニター2台以上のときのみ） |
 
 フリーカメラは **F5** キーで ON/OFF、**F6** キーでカメラ固定のトグルができます。
 コントローラーの既定操作は **Select + Y** で ON/OFF、フリーカメラ中は **Select + X** で固定切り替え、**Select + B** で時間停止、**Select + A** でスクリーンショット保存です。
@@ -89,6 +86,7 @@
 | `UltimateSurvivor` | `false` | 鉄骨渡りミニゲームで落下しなくなる（チート） |
 | `GambleAlwaysWin` | `false` | ギャンブルで負けなくなる（チート） |
 | `Likability` | `false` | 好感度ヒント表示<br>会話選択肢・ドリンク・フードの正解をゲーム内に表示します。<br>【会話選択肢】選択肢テキストの先頭に記号が追加されます。<br>  ★ : 好感度UP（正解）<br>  ▼ : 好感度DOWN（酔い選択肢だが現在の状況では効果なし）<br>【ドリンク・フード】アイテムの背景色が変化します。<br>  緑 : キャストのお気に入り（AddFavoriteLikability > 0）<br>  黄 : 今日の旬アイテム（ボーナスあり）<br>  赤 : キャストが嫌いなもの（AddFavoriteLikability < 0） |
+| `BunnyDrinksEnabled` | `false` | バニー系ドリンクを常時メニューに追加<br>BUNNY_TRAP / BUNNY_MAX / BUNNY_PUNCH を進行状況に関わらず常時注文可能にします。 |
 
 #### キャスト出勤順変更の操作方法
 
@@ -116,16 +114,25 @@ F7 キー（既定）で Wardrobe パネルを開き、表示中のキャスト�
 |------|-----------|------|
 | `Enabled` | `true` | 衣装変更を有効化（要再起動）<br>衣装変更 UI とパッチを有効化します。<br>OFF→ON でパッチ適用が必要なため、変更は再起動後に反映されます。 |
 | `RespectGameCostumeOverride` | `true` | ゲーム指定衣装を優先<br>試着室などゲームが特定の衣装を強制するシーンでは MOD 側の衣装変更を一時停止します。<br>ゲーム内のイベントと衣装の競合を防げます。 |
+| `PersistCostumeOverrides` | `true` | 衣装変更状態を保存する<br>Wardrobe で変更した衣装の状態を保存し、ゲーム再起動後も復元します。<br>OFF にすると以降の変更は保存されません（既存の保存内容は残るため、ON に戻すと復元されます）。<br>Steam Cloud 対象外。 |
 | `SwimWearStocking` | `true` | 水着+ストッキング適用<br>水着コスチューム着用中にストッキングを適用できるようにします。<br>水着モデルには本来ストッキング用ブレンドシェイプがないため、同キャラの Uniform コスチュームからデータを移植します。 |
-| `StockingOffset` | `0` | ストッキング 押出し量 (m)<br>水着+ストッキング適用時、stocking 頂点を肌より外側へ保つ最小距離（メートル）。<br>押し出すと水着の食い込み（タイトな演出）が再現できますが、stocking が水着を貫通します。<br>0 で無効化。デフォルト 0 (無効)。 |
-| `StockingSkinShrink` | `0.001` | 肌 押込み量 (m)<br>水着+ストッキング適用時、肌（mesh_skin_lower）の頂点を「stocking 押し出し後表面より内側」に<br>保つ目標距離（メートル）。stocking と肌が z-fighting している箇所では、まず肌を<br>stocking 表面まで引っ込めてから、さらにこの距離だけ内側に押し込みます。<br>押し込むと肌の貫通はなくなりますが、水着の食い込み（タイトな演出）が再現できません。<br>0 で無効化。デフォルト 0.001 (1mm)。 |
-| `StockingSkinFalloffRadius` | `0.001` | 肌押込み フェード半径 (m)<br>肌の押し込み量を、隣接 mesh（mesh_skin_upper 等）からの距離で線形フェードさせる半径（メートル）。<br>距離 0 で押し込み 0、半径以上で 100%。境界での段差を防ぎます。0 で無効化（一様押し込み）。<br>デフォルト 0.001 (1mm)。 |
-| `StockingShapeFalloffRadius` | `0.001` | BlendShape フェード半径 (m)<br>skin_stocking 系 blendShape (skin_stocking / skin_socks / skin_stocking_lower) の delta 自体を、<br>隣接 mesh（mesh_skin_upper 等）からの距離で線形フェードさせる半径（メートル）。<br>距離 0 で blendShape 効果 0、半径以上で 100%。境界（ウエスト等）の段差を解消します。<br>0 で無効化（blendShape 効果は全頂点 100%）。デフォルト 0.001 (1mm)。 |
-| `PantiesAltSlotMatch` | `true` | 水着・バニーガール衣装でも下着を表示<br>ゲーム本体は通常衣装専用の panties slot にしか反応しないため、Mod 側で水着/バニー用スロットもフォールバック検出します。<br>差し替え後の Material は通常衣装用テクスチャなので、UV 不一致で見た目が崩れる場合は OFF にしてください。 |
-| `PantiesAltSlotOverrideOnly` | `true` | Mod で下着を指定したキャストのみ適用 (OFF で全員)<br>ON  : Mod で下着を明示選択したキャストのみフォールバックを適用。他キャストはバニラ挙動（水着/バニーで肌色）。<br>OFF : 常時全キャストに適用。ゲーム本体由来の ReloadPanties でも水着/バニーに通常下着が出ます。<br>PantiesAltSlotMatch=OFF のときはこの設定は無視されます。 |
+| `StockingOffset` | `0` | ストッキング 押出し量 (m)<br>水着+ストッキング適用時、ストッキングを肌よりどれだけ外側に出すかを指定します（メートル）。<br>値を増やすと水着の食い込みが再現できますが、ストッキングが水着を貫通します。0 で無効。 |
+| `StockingSkinShrink` | `0.001` | ストッキング 肌押込み量 (m)<br>水着+ストッキング適用時、肌をストッキングよりどれだけ内側に押し込むかを指定します（メートル）。<br>肌のチラつき（肌とストッキングの干渉）が見える場合に大きくしてください。<br>ただし水着の食い込み演出は弱まります。0 で無効。 |
+| `StockingSkinFalloffRadius` | `0.001` | ストッキング 肌押込み フェード半径 (m)<br>肌の押し込みを、上半身などとの境界で滑らかにフェードさせる距離です（メートル）。<br>境界に段差が見える場合に大きくしてください。0 で無効（境界無視で一様に押し込む）。 |
+| `StockingShapeFalloffRadius` | `0.001` | ストッキング 肌形状フェード半径 (m)<br>ストッキング由来の肌形状補正を、ウエストなどの境界で滑らかにフェードさせる距離です（メートル）。<br>境界の段差が気になる場合に大きくしてください。0 で無効（補正は全身一様）。 |
+| `TopsDistancePreserveRange` | `0.100` | 上衣 距離保存 検索範囲 (m)<br>別キャラ上衣を当てたときの体型補正の有効範囲です（メートル）。<br>小さくするとワンピース型衣装の下半身が補正されず、大きくしすぎると<br>服から遠い箇所まで体に張り付いて不自然になります。 |
+| `TopsSkinMinOffset` | `0.005` | 上衣 肌からの最小距離 (m)<br>元キャラ側で衣装が肌にめり込んでいる箇所を補正する安全マージンです（メートル）。<br>当てた服の一部が肌にめり込んで見える場合に大きくしてください。<br>0 で無効（めり込みは未補正のまま反映されます）。 |
+| `TopsSkinSampleRadius` | `0.03` | 上衣 肌サンプル半径 (m)<br>体型補正で参照する肌のサンプリング半径です（メートル）。<br>鎖骨・肩甲骨など凹凸の多い箇所で補正がばらつく場合に大きくしてください。<br>0 で最小近傍 3 点を使用。 |
+| `TopsSkinWeightFalloff` | `0.02` | 上衣 肌 weight 転送 falloff (m)<br>関節を曲げたときに肌密着部の服が肌から剥離・突き抜けないよう、<br>肌の動きに追随させる範囲です（メートル）。<br>肩・肘などで服が肌から浮いて見える場合に大きくしてください。<br>0 で無効。推奨初期値: 0.020 m。 |
+| `TopsSkinShrink` | `0.005` | 上衣 肌押込み量 (m)<br>別キャラ上衣を当てたとき、肌が服を貫通する箇所を内側に押し込む距離です（メートル）。<br>肌のチラつき（肌と服の干渉）が見える場合に大きくしてください。0 で無効。 |
+| `TopsSkinShrinkFalloffRadius` | `0.001` | 上衣 肌押込み フェード半径 (m)<br>肌の押し込みを、顔・首回りで滑らかにフェードさせる距離です（メートル）。<br>首元で押し込みが顔まで波及する場合に大きくしてください。<br>0 で無効（顔境界無視で一様に押し込む）。 |
+| `TopsSkinShrinkSampleRadius` | `0.0` | 上衣 肌押込み cloth サンプル半径 (m)<br>肌押込みの参照範囲です（メートル）。<br>フリル・袖などで押し込みがガタつく場合や、ウエストの縫い目で段差が見える場合に<br>大きくしてください。0 で 10mm 固定（狭い既定）。 |
+| `BottomsSkinShrink` | `0.005` | 下衣 肌押込み量 (m)<br>別キャラ下衣（スカート等）を当てたとき、肌がスカートを貫通する箇所を内側に押し込む距離です（メートル）。<br>腰・腿・膝下のチラつきが見える場合に大きくしてください。<br>0 で無効。最大 1cm 制限（過大値で脚が消える事故を防ぐため）。 |
+| `BottomsSkinShrinkFalloffRadius` | `0.001` | 下衣 肌押込み フェード半径 (m)<br>肌の押し込みを、顔・首回りで滑らかにフェードさせる距離です（メートル）。<br>首元で押し込みが顔まで波及する場合に大きくしてください。<br>0 で無効（顔境界無視で一様に押し込む）。 |
+| `BottomsSkinShrinkSampleRadius` | `0.05` | 下衣 肌押込み skirt サンプル半径 (m)<br>肌押込みの参照範囲です（メートル）。<br>スカートのフリルなどで押し込みがガタつく場合や、ウエストの縫い目で段差が見える場合に<br>大きくしてください。0 で 10mm 固定（狭い既定）。 |
+| `PantiesAltSlotMatch` | `true` | 水着・バニーガール衣装でも下着を表示<br>水着・バニー衣装でもパンツが表示されるようにします（通常はゲーム側の制限で非表示）。<br>テクスチャは通常衣装用のため、UV 不一致で見た目が崩れる場合は OFF にしてください。 |
+| `PantiesAltSlotOverrideOnly` | `true` | Mod で下着を指定したキャストのみ適用 (OFF で全員)<br>ON  : Mod で下着を選択したキャストのみ適用（他キャストは水着/バニー時に通常通り肌色）。<br>OFF : 全キャストに常時適用（水着/バニーでも通常下着が出ます）。<br>PantiesAltSlotMatch=OFF のときはこの設定は無視されます。 |
 | `DisableStockings` | `false` | キャストのストッキング(パンスト)を非表示 |
-| `ShowKey` | `F7` | 衣装変更 UI 表示のキーボードキー |
-| `ShowButton` | `None` | 衣装変更 UI 表示のボタン |
 
 #### 操作方法
 
@@ -157,16 +164,6 @@ Wardrobe パネル表示中、以下のキーで操作できます。
 | `ControllerModifier` | `Select` | コントローラ修飾ボタン<br>ホットキーの同時押し用。ゲーム本来のコントローラー操作との競合回避に使用します。 |
 | `ScreenshotScale` | `1` | スクリーンショット解像度倍率<br>1 で通常のスクリーンショットと同じ解像度、2 で倍の解像度になります。 |
 | `FastForwardSpeed` | `10` | 早送り倍率<br>FastForward ホットキー押下中の Time.timeScale 倍率。 |
-| `ToggleOverlayKey` | `F12` | オーバーレイ表示切替のキーボードキー<br>フリーカメラの操作ガイドが対象です。 |
-| `ToggleOverlayButton` | `Start` | オーバーレイ表示切替のボタン<br>フリーカメラの操作ガイドが対象です。<br>ControllerModifier と同時押しが必要です。 |
-| `CaptureScreenshotKey` | `P` | スクリーンショット保存のキーボードキー<br>フリーカメラ中にゲーム UI・MOD オーバーレイを写さず BepInEx/screenshots フォルダへ PNG 出力します。 |
-| `CaptureScreenshotButton` | `A` | スクリーンショット保存のボタン<br>フリーカメラ中にゲーム UI・MOD オーバーレイを写さず BepInEx/screenshots フォルダへ PNG 出力します。<br>ControllerModifier と同時押しが必要です。 |
-| `ToggleTimeStopKey` | `T` | 時間停止 ON/OFFのキーボードキー<br>フリーカメラ中の撮影構図決めなどに使用します。 |
-| `ToggleTimeStopButton` | `B` | 時間停止 ON/OFFのボタン<br>フリーカメラ中の撮影構図決めなどに使用します。<br>ControllerModifier と同時押しが必要です。 |
-| `FrameAdvanceKey` | `F` | 1 フレーム送りのキーボードキー<br>時間停止中のみ有効です。 |
-| `FrameAdvanceButton` | `None` | 1 フレーム送りのボタン<br>時間停止中のみ有効です。 |
-| `FastForwardKey` | `G` | 早送りホールドのキーボードキー<br>押している間のみ有効。倍率は FastForwardSpeed で設定。 |
-| `FastForwardButton` | `None` | 早送りホールドのボタン<br>押している間のみ有効。倍率は FastForwardSpeed で設定。 |
 
 ## [HideUI] UI 非表示設定
 
@@ -188,4 +185,27 @@ Wardrobe パネル表示中、以下のキーで操作できます。
 | **← / →** | スライダー値の増減 |
 | **Tab / 1〜9** | カテゴリ切替 |
 | **Esc** | パネルを閉じる |
+
+## [Hotkey] ホットキー
+
+| キー | デフォルト | 説明 |
+|------|-----------|------|
+| `ToggleFreeCamKey` | `F5` | フリーカメラ ON/OFFのキーボードキー |
+| `ToggleFreeCamButton` | `Y` | フリーカメラ ON/OFFのボタン<br>ControllerModifier と同時押しが必要です。 |
+| `ToggleFixedFreeCamKey` | `F6` | 固定フリーカメラ ON/OFFのキーボードキー<br>フリーカメラ起動中にカメラ位置を固定します。フリーカメラ起動中のみ有効。 |
+| `ToggleFixedFreeCamButton` | `X` | 固定フリーカメラ ON/OFFのボタン<br>フリーカメラ起動中にカメラ位置を固定します。フリーカメラ起動中のみ有効。<br>ControllerModifier と同時押しが必要です。 |
+| `ToggleFreeCamDisplayModeKey` | `F4` | フリーカメラの出力先切替のキーボードキー<br>FreeCamDisplayMode 設定の値を順番に切り替えます。フリーカメラ起動中のみ有効。 |
+| `ToggleFreeCamDisplayModeButton` | `None` | フリーカメラの出力先切替のボタン<br>FreeCamDisplayMode 設定の値を順番に切り替えます。フリーカメラ起動中のみ有効。<br>ControllerModifier と同時押しが必要です。 |
+| `ToggleOverlayKey` | `F12` | オーバーレイ表示切替のキーボードキー<br>フリーカメラの操作ガイドが対象です。 |
+| `ToggleOverlayButton` | `Start` | オーバーレイ表示切替のボタン<br>フリーカメラの操作ガイドが対象です。<br>ControllerModifier と同時押しが必要です。 |
+| `CaptureScreenshotKey` | `P` | スクリーンショット保存のキーボードキー<br>フリーカメラ中にゲーム UI・MOD オーバーレイを写さず BepInEx/screenshots フォルダへ PNG 出力します。 |
+| `CaptureScreenshotButton` | `A` | スクリーンショット保存のボタン<br>フリーカメラ中にゲーム UI・MOD オーバーレイを写さず BepInEx/screenshots フォルダへ PNG 出力します。<br>ControllerModifier と同時押しが必要です。 |
+| `ToggleTimeStopKey` | `T` | 時間停止 ON/OFFのキーボードキー<br>フリーカメラ中の撮影構図決めなどに使用します。 |
+| `ToggleTimeStopButton` | `B` | 時間停止 ON/OFFのボタン<br>フリーカメラ中の撮影構図決めなどに使用します。<br>ControllerModifier と同時押しが必要です。 |
+| `FrameAdvanceKey` | `F` | 1 フレーム送りのキーボードキー<br>時間停止中のみ有効です。 |
+| `FrameAdvanceButton` | `None` | 1 フレーム送りのボタン<br>時間停止中のみ有効です。 |
+| `FastForwardKey` | `G` | 早送りホールドのキーボードキー<br>押している間のみ有効。倍率は FastForwardSpeed で設定。 |
+| `FastForwardButton` | `None` | 早送りホールドのボタン<br>押している間のみ有効。倍率は FastForwardSpeed で設定。 |
+| `ShowKey` | `F7` | 衣装変更 UI 表示のキーボードキー |
+| `ShowButton` | `None` | 衣装変更 UI 表示のボタン |
 

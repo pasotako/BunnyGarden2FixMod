@@ -56,6 +56,8 @@ public static class PantiesAltSlotMatchPatch
     }
 
     // 将来 m_panties_skin/bunny を使う新コスが追加されたらここに足すこと（無いと cache 誤無効化で復元バグ）。
+    // フルボディ DLC (DLC01/06/09/10) は m_panties_skin/bunny を使うか未確認のため未追加。
+    // 実機で alt slot 使用を確認できたら IsFullBodyCostume へ統合または個別追加する。
     private static bool IsAltSlotCostume(CostumeType c) =>
         c == CostumeType.SwimWear || c == CostumeType.Bunnygirl;
 
@@ -81,7 +83,7 @@ public static class PantiesAltSlotMatchPatch
 
     static void Postfix(CharacterHandle __instance, Material[] mat, ref int __result)
     {
-        if (!Plugin.ConfigPantiesAltSlotMatch.Value) return;
+        if (!Configs.PantiesAltSlotMatch.Value) return;
 
         bool hasId = TryGetCharID(__instance, out var charId);
         bool hasCostume = TryGetCostume(__instance, out var costume);
@@ -111,7 +113,7 @@ public static class PantiesAltSlotMatchPatch
         // Postfix の例外漏れは ReloadPanties を巻き込んで装備不適用 (可視的失敗) になるため握りつぶす。
         try
         {
-            if (Plugin.ConfigPantiesAltSlotOverrideOnly.Value)
+            if (Configs.PantiesAltSlotOverrideOnly.Value)
             {
                 if (!hasId) return;
                 if (!PantiesOverrideStore.TryGet(charId, out _, out _)) return;

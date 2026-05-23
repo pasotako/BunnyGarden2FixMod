@@ -47,10 +47,8 @@ public static class Configs
     public static ConfigEntry<bool> HideGameUiInFreeCam;
     /// <summary>フリーカメラ操作にゲームパッド入力を使用</summary>
     public static ConfigEntry<bool> ControllerEnabled;
-    /// <summary>フリーカメラ ON/OFF</summary>
-    public static global::BunnyGarden2FixMod.Utils.HotkeyConfig FreeCamToggle;
-    /// <summary>固定フリーカメラ ON/OFF</summary>
-    public static global::BunnyGarden2FixMod.Utils.HotkeyConfig FixedFreeCamToggle;
+    /// <summary>フリーカメラの出力先</summary>
+    public static ConfigEntry<BunnyGarden2FixMod.FreeCamDisplayMode> FreeCamDisplayMode;
     /// <summary>バーの背景キャスト 2 人の会話リアクションモーションを多様化</summary>
     public static ConfigEntry<bool> MoreTalkReactions;
     /// <summary>一部モーションでスカートが体にめり込む現象を補正</summary>
@@ -73,28 +71,50 @@ public static class Configs
     public static ConfigEntry<bool> GambleAlwaysWinEnabled;
     /// <summary>好感度ヒント表示</summary>
     public static ConfigEntry<bool> CheatLikability;
+    /// <summary>バニー系ドリンクを常時メニューに追加</summary>
+    public static ConfigEntry<bool> BunnyDrinksEnabled;
     /// <summary>衣装変更を有効化（要再起動）</summary>
     public static ConfigEntry<bool> CostumeChangerEnabled;
     /// <summary>ゲーム指定衣装を優先</summary>
     public static ConfigEntry<bool> RespectGameCostumeOverride;
+    /// <summary>衣装変更状態を保存する</summary>
+    public static ConfigEntry<bool> PersistCostumeOverrides;
     /// <summary>水着+ストッキング適用</summary>
     public static ConfigEntry<bool> SwimWearStocking;
     /// <summary>ストッキング 押出し量 (m)</summary>
     public static ConfigEntry<float> StockingOffset;
-    /// <summary>肌 押込み量 (m)</summary>
+    /// <summary>ストッキング 肌押込み量 (m)</summary>
     public static ConfigEntry<float> StockingSkinShrink;
-    /// <summary>肌押込み フェード半径 (m)</summary>
+    /// <summary>ストッキング 肌押込み フェード半径 (m)</summary>
     public static ConfigEntry<float> StockingSkinFalloffRadius;
-    /// <summary>BlendShape フェード半径 (m)</summary>
+    /// <summary>ストッキング 肌形状フェード半径 (m)</summary>
     public static ConfigEntry<float> StockingShapeFalloffRadius;
+    /// <summary>上衣 距離保存 検索範囲 (m)</summary>
+    public static ConfigEntry<float> TopsDistancePreserveRange;
+    /// <summary>上衣 肌からの最小距離 (m)</summary>
+    public static ConfigEntry<float> TopsSkinMinOffset;
+    /// <summary>上衣 肌サンプル半径 (m)</summary>
+    public static ConfigEntry<float> TopsSkinSampleRadius;
+    /// <summary>上衣 肌 weight 転送 falloff (m)</summary>
+    public static ConfigEntry<float> TopsSkinWeightFalloff;
+    /// <summary>上衣 肌押込み量 (m)</summary>
+    public static ConfigEntry<float> TopsSkinShrink;
+    /// <summary>上衣 肌押込み フェード半径 (m)</summary>
+    public static ConfigEntry<float> TopsSkinShrinkFalloffRadius;
+    /// <summary>上衣 肌押込み cloth サンプル半径 (m)</summary>
+    public static ConfigEntry<float> TopsSkinShrinkSampleRadius;
+    /// <summary>下衣 肌押込み量 (m)</summary>
+    public static ConfigEntry<float> BottomsSkinShrink;
+    /// <summary>下衣 肌押込み フェード半径 (m)</summary>
+    public static ConfigEntry<float> BottomsSkinShrinkFalloffRadius;
+    /// <summary>下衣 肌押込み skirt サンプル半径 (m)</summary>
+    public static ConfigEntry<float> BottomsSkinShrinkSampleRadius;
     /// <summary>水着・バニーガール衣装でも下着を表示</summary>
     public static ConfigEntry<bool> PantiesAltSlotMatch;
     /// <summary>Mod で下着を指定したキャストのみ適用 (OFF で全員)</summary>
     public static ConfigEntry<bool> PantiesAltSlotOverrideOnly;
     /// <summary>キャストのストッキング(パンスト)を非表示</summary>
     public static ConfigEntry<bool> DisableStockings;
-    /// <summary>衣装変更 UI 表示</summary>
-    public static global::BunnyGarden2FixMod.Utils.HotkeyConfig CostumeChangerShow;
     /// <summary>Steam 経由起動を強制</summary>
     public static ConfigEntry<bool> SteamLaunchCheck;
     /// <summary>MOD UI スケール</summary>
@@ -109,6 +129,18 @@ public static class Configs
     public static ConfigEntry<int> ScreenshotScale;
     /// <summary>早送り倍率</summary>
     public static ConfigEntry<float> FastForwardSpeed;
+    /// <summary>旅行・特別シーンで所持金 UI を非表示</summary>
+    public static ConfigEntry<bool> HideMoneyInSpecialScenes;
+    /// <summary>画面下のボタンガイド(操作ヒント)を常時非表示</summary>
+    public static ConfigEntry<bool> HideButtonGuide;
+    /// <summary>ラブカウンター(好感度ゲージ)を常時非表示</summary>
+    public static ConfigEntry<bool> HideLikabilityGauge;
+    /// <summary>フリーカメラ ON/OFF</summary>
+    public static global::BunnyGarden2FixMod.Utils.HotkeyConfig FreeCamToggle;
+    /// <summary>固定フリーカメラ ON/OFF</summary>
+    public static global::BunnyGarden2FixMod.Utils.HotkeyConfig FixedFreeCamToggle;
+    /// <summary>フリーカメラの出力先切替</summary>
+    public static global::BunnyGarden2FixMod.Utils.HotkeyConfig FreeCamDisplayModeToggle;
     /// <summary>オーバーレイ表示切替</summary>
     public static global::BunnyGarden2FixMod.Utils.HotkeyConfig OverlayToggle;
     /// <summary>スクリーンショット保存</summary>
@@ -119,12 +151,8 @@ public static class Configs
     public static global::BunnyGarden2FixMod.Utils.HotkeyConfig FrameAdvance;
     /// <summary>早送りホールド</summary>
     public static global::BunnyGarden2FixMod.Utils.HotkeyConfig FastForward;
-    /// <summary>旅行・特別シーンで所持金 UI を非表示</summary>
-    public static ConfigEntry<bool> HideMoneyInSpecialScenes;
-    /// <summary>画面下のボタンガイド(操作ヒント)を常時非表示</summary>
-    public static ConfigEntry<bool> HideButtonGuide;
-    /// <summary>ラブカウンター(好感度ゲージ)を常時非表示</summary>
-    public static ConfigEntry<bool> HideLikabilityGauge;
+    /// <summary>衣装変更 UI 表示</summary>
+    public static global::BunnyGarden2FixMod.Utils.HotkeyConfig CostumeChangerShow;
 
     // ─── BindAll: Plugin.Awake から1回呼ぶ ──────────
     public static void BindAll(ConfigFile cfg)
@@ -229,21 +257,14 @@ Off / FXAA / TAA / MSAA2x / MSAA4x / MSAA8x。
             true,
             @"フリーカメラ操作にゲームパッド入力を使用");
 
-        FreeCamToggle = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
-            "Camera", "ToggleFreeCam",
-            global::UnityEngine.InputSystem.Key.F5,
-            global::BunnyGarden2FixMod.Utils.ControllerButton.Y,
-            @"フリーカメラ ON/OFF",
-            @"",
-            @"ControllerModifier と同時押しが必要です。");
-
-        FixedFreeCamToggle = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
-            "Camera", "ToggleFixedFreeCam",
-            global::UnityEngine.InputSystem.Key.F6,
-            global::BunnyGarden2FixMod.Utils.ControllerButton.X,
-            @"固定フリーカメラ ON/OFF",
-            @"フリーカメラ起動中にカメラ位置を固定します。フリーカメラ起動中のみ有効。",
-            @"ControllerModifier と同時押しが必要です。");
+        FreeCamDisplayMode = cfg.Bind("Camera", "FreeCamDisplayMode",
+            BunnyGarden2FixMod.FreeCamDisplayMode.MainScreen,
+            @"フリーカメラの出力先
+フリーカメラの映像をどこに表示するかを選択します。
+排他的フルスクリーンモードの場合は、MainScreen が使用されます。
+MainScreen: メイン画面（通常のフリーカメラ）
+PiP: ピクチャー・イン・ピクチャー
+Display2: サブモニター（モニター2台以上のときのみ）");
 
         MoreTalkReactions = cfg.Bind("Animation", "MoreTalkReactions",
             false,
@@ -315,6 +336,11 @@ F1 で編集モードを開始し、数字キー（1〜5）でキャストを選
   黄 : 今日の旬アイテム（ボーナスあり）
   赤 : キャストが嫌いなもの（AddFavoriteLikability < 0）");
 
+        BunnyDrinksEnabled = cfg.Bind("Cheat", "BunnyDrinksEnabled",
+            false,
+            @"バニー系ドリンクを常時メニューに追加
+BUNNY_TRAP / BUNNY_MAX / BUNNY_PUNCH を進行状況に関わらず常時注文可能にします。");
+
         CostumeChangerEnabled = cfg.Bind("CostumeChanger", "Enabled",
             true,
             @"衣装変更を有効化（要再起動）
@@ -327,6 +353,13 @@ OFF→ON でパッチ適用が必要なため、変更は再起動後に反映�
 試着室などゲームが特定の衣装を強制するシーンでは MOD 側の衣装変更を一時停止します。
 ゲーム内のイベントと衣装の競合を防げます。");
 
+        PersistCostumeOverrides = cfg.Bind("CostumeChanger", "PersistCostumeOverrides",
+            true,
+            @"衣装変更状態を保存する
+Wardrobe で変更した衣装の状態を保存し、ゲーム再起動後も復元します。
+OFF にすると以降の変更は保存されません（既存の保存内容は残るため、ON に戻すと復元されます）。
+Steam Cloud 対象外。");
+
         SwimWearStocking = cfg.Bind("CostumeChanger", "SwimWearStocking",
             true,
             @"水着+ストッキング適用
@@ -337,64 +370,141 @@ OFF→ON でパッチ適用が必要なため、変更は再起動後に反映�
             0.0f,
             new ConfigDescription(
                 @"ストッキング 押出し量 (m)
-水着+ストッキング適用時、stocking 頂点を肌より外側へ保つ最小距離（メートル）。
-押し出すと水着の食い込み（タイトな演出）が再現できますが、stocking が水着を貫通します。
-0 で無効化。デフォルト 0 (無効)。",
+水着+ストッキング適用時、ストッキングを肌よりどれだけ外側に出すかを指定します（メートル）。
+値を増やすと水着の食い込みが再現できますが、ストッキングが水着を貫通します。0 で無効。",
                 new AcceptableValueRange<float>(0.0f, 0.01f)));
 
         StockingSkinShrink = cfg.Bind("CostumeChanger", "StockingSkinShrink",
             0.001f,
             new ConfigDescription(
-                @"肌 押込み量 (m)
-水着+ストッキング適用時、肌（mesh_skin_lower）の頂点を「stocking 押し出し後表面より内側」に
-保つ目標距離（メートル）。stocking と肌が z-fighting している箇所では、まず肌を
-stocking 表面まで引っ込めてから、さらにこの距離だけ内側に押し込みます。
-押し込むと肌の貫通はなくなりますが、水着の食い込み（タイトな演出）が再現できません。
-0 で無効化。デフォルト 0.001 (1mm)。",
+                @"ストッキング 肌押込み量 (m)
+水着+ストッキング適用時、肌をストッキングよりどれだけ内側に押し込むかを指定します（メートル）。
+肌のチラつき（肌とストッキングの干渉）が見える場合に大きくしてください。
+ただし水着の食い込み演出は弱まります。0 で無効。",
                 new AcceptableValueRange<float>(0.0f, 0.01f)));
 
         StockingSkinFalloffRadius = cfg.Bind("CostumeChanger", "StockingSkinFalloffRadius",
             0.001f,
             new ConfigDescription(
-                @"肌押込み フェード半径 (m)
-肌の押し込み量を、隣接 mesh（mesh_skin_upper 等）からの距離で線形フェードさせる半径（メートル）。
-距離 0 で押し込み 0、半径以上で 100%。境界での段差を防ぎます。0 で無効化（一様押し込み）。
-デフォルト 0.001 (1mm)。",
+                @"ストッキング 肌押込み フェード半径 (m)
+肌の押し込みを、上半身などとの境界で滑らかにフェードさせる距離です（メートル）。
+境界に段差が見える場合に大きくしてください。0 で無効（境界無視で一様に押し込む）。",
                 new AcceptableValueRange<float>(0.0f, 0.01f)));
 
         StockingShapeFalloffRadius = cfg.Bind("CostumeChanger", "StockingShapeFalloffRadius",
             0.001f,
             new ConfigDescription(
-                @"BlendShape フェード半径 (m)
-skin_stocking 系 blendShape (skin_stocking / skin_socks / skin_stocking_lower) の delta 自体を、
-隣接 mesh（mesh_skin_upper 等）からの距離で線形フェードさせる半径（メートル）。
-距離 0 で blendShape 効果 0、半径以上で 100%。境界（ウエスト等）の段差を解消します。
-0 で無効化（blendShape 効果は全頂点 100%）。デフォルト 0.001 (1mm)。",
+                @"ストッキング 肌形状フェード半径 (m)
+ストッキング由来の肌形状補正を、ウエストなどの境界で滑らかにフェードさせる距離です（メートル）。
+境界の段差が気になる場合に大きくしてください。0 で無効（補正は全身一様）。",
                 new AcceptableValueRange<float>(0.0f, 0.01f)));
+
+        TopsDistancePreserveRange = cfg.Bind("CostumeChanger", "TopsDistancePreserveRange",
+            0.1f,
+            new ConfigDescription(
+                @"上衣 距離保存 検索範囲 (m)
+別キャラ上衣を当てたときの体型補正の有効範囲です（メートル）。
+小さくするとワンピース型衣装の下半身が補正されず、大きくしすぎると
+服から遠い箇所まで体に張り付いて不自然になります。",
+                new AcceptableValueRange<float>(0.01f, 0.5f)));
+
+        TopsSkinMinOffset = cfg.Bind("CostumeChanger", "TopsSkinMinOffset",
+            0.005f,
+            new ConfigDescription(
+                @"上衣 肌からの最小距離 (m)
+元キャラ側で衣装が肌にめり込んでいる箇所を補正する安全マージンです（メートル）。
+当てた服の一部が肌にめり込んで見える場合に大きくしてください。
+0 で無効（めり込みは未補正のまま反映されます）。",
+                new AcceptableValueRange<float>(0.0f, 0.01f)));
+
+        TopsSkinSampleRadius = cfg.Bind("CostumeChanger", "TopsSkinSampleRadius",
+            0.03f,
+            new ConfigDescription(
+                @"上衣 肌サンプル半径 (m)
+体型補正で参照する肌のサンプリング半径です（メートル）。
+鎖骨・肩甲骨など凹凸の多い箇所で補正がばらつく場合に大きくしてください。
+0 で最小近傍 3 点を使用。",
+                new AcceptableValueRange<float>(0.0f, 0.1f)));
+
+        TopsSkinWeightFalloff = cfg.Bind("CostumeChanger", "TopsSkinWeightFalloff",
+            0.02f,
+            new ConfigDescription(
+                @"上衣 肌 weight 転送 falloff (m)
+関節を曲げたときに肌密着部の服が肌から剥離・突き抜けないよう、
+肌の動きに追随させる範囲です（メートル）。
+肩・肘などで服が肌から浮いて見える場合に大きくしてください。
+0 で無効。推奨初期値: 0.020 m。",
+                new AcceptableValueRange<float>(0.0f, 0.05f)));
+
+        TopsSkinShrink = cfg.Bind("CostumeChanger", "TopsSkinShrink",
+            0.005f,
+            new ConfigDescription(
+                @"上衣 肌押込み量 (m)
+別キャラ上衣を当てたとき、肌が服を貫通する箇所を内側に押し込む距離です（メートル）。
+肌のチラつき（肌と服の干渉）が見える場合に大きくしてください。0 で無効。",
+                new AcceptableValueRange<float>(0.0f, 0.01f)));
+
+        TopsSkinShrinkFalloffRadius = cfg.Bind("CostumeChanger", "TopsSkinShrinkFalloffRadius",
+            0.001f,
+            new ConfigDescription(
+                @"上衣 肌押込み フェード半径 (m)
+肌の押し込みを、顔・首回りで滑らかにフェードさせる距離です（メートル）。
+首元で押し込みが顔まで波及する場合に大きくしてください。
+0 で無効（顔境界無視で一様に押し込む）。",
+                new AcceptableValueRange<float>(0.0f, 0.01f)));
+
+        TopsSkinShrinkSampleRadius = cfg.Bind("CostumeChanger", "TopsSkinShrinkSampleRadius",
+            0.0f,
+            new ConfigDescription(
+                @"上衣 肌押込み cloth サンプル半径 (m)
+肌押込みの参照範囲です（メートル）。
+フリル・袖などで押し込みがガタつく場合や、ウエストの縫い目で段差が見える場合に
+大きくしてください。0 で 10mm 固定（狭い既定）。",
+                new AcceptableValueRange<float>(0.0f, 0.1f)));
+
+        BottomsSkinShrink = cfg.Bind("CostumeChanger", "BottomsSkinShrink",
+            0.005f,
+            new ConfigDescription(
+                @"下衣 肌押込み量 (m)
+別キャラ下衣（スカート等）を当てたとき、肌がスカートを貫通する箇所を内側に押し込む距離です（メートル）。
+腰・腿・膝下のチラつきが見える場合に大きくしてください。
+0 で無効。最大 1cm 制限（過大値で脚が消える事故を防ぐため）。",
+                new AcceptableValueRange<float>(0.0f, 0.01f)));
+
+        BottomsSkinShrinkFalloffRadius = cfg.Bind("CostumeChanger", "BottomsSkinShrinkFalloffRadius",
+            0.001f,
+            new ConfigDescription(
+                @"下衣 肌押込み フェード半径 (m)
+肌の押し込みを、顔・首回りで滑らかにフェードさせる距離です（メートル）。
+首元で押し込みが顔まで波及する場合に大きくしてください。
+0 で無効（顔境界無視で一様に押し込む）。",
+                new AcceptableValueRange<float>(0.0f, 0.01f)));
+
+        BottomsSkinShrinkSampleRadius = cfg.Bind("CostumeChanger", "BottomsSkinShrinkSampleRadius",
+            0.05f,
+            new ConfigDescription(
+                @"下衣 肌押込み skirt サンプル半径 (m)
+肌押込みの参照範囲です（メートル）。
+スカートのフリルなどで押し込みがガタつく場合や、ウエストの縫い目で段差が見える場合に
+大きくしてください。0 で 10mm 固定（狭い既定）。",
+                new AcceptableValueRange<float>(0.0f, 0.1f)));
 
         PantiesAltSlotMatch = cfg.Bind("CostumeChanger", "PantiesAltSlotMatch",
             true,
             @"水着・バニーガール衣装でも下着を表示
-ゲーム本体は通常衣装専用の panties slot にしか反応しないため、Mod 側で水着/バニー用スロットもフォールバック検出します。
-差し替え後の Material は通常衣装用テクスチャなので、UV 不一致で見た目が崩れる場合は OFF にしてください。");
+水着・バニー衣装でもパンツが表示されるようにします（通常はゲーム側の制限で非表示）。
+テクスチャは通常衣装用のため、UV 不一致で見た目が崩れる場合は OFF にしてください。");
 
         PantiesAltSlotOverrideOnly = cfg.Bind("CostumeChanger", "PantiesAltSlotOverrideOnly",
             true,
             @"Mod で下着を指定したキャストのみ適用 (OFF で全員)
-ON  : Mod で下着を明示選択したキャストのみフォールバックを適用。他キャストはバニラ挙動（水着/バニーで肌色）。
-OFF : 常時全キャストに適用。ゲーム本体由来の ReloadPanties でも水着/バニーに通常下着が出ます。
+ON  : Mod で下着を選択したキャストのみ適用（他キャストは水着/バニー時に通常通り肌色）。
+OFF : 全キャストに常時適用（水着/バニーでも通常下着が出ます）。
 PantiesAltSlotMatch=OFF のときはこの設定は無視されます。");
 
         DisableStockings = cfg.Bind("CostumeChanger", "DisableStockings",
             false,
             @"キャストのストッキング(パンスト)を非表示");
-
-        CostumeChangerShow = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
-            "CostumeChanger", "Show",
-            global::UnityEngine.InputSystem.Key.F7,
-            global::BunnyGarden2FixMod.Utils.ControllerButton.None,
-            @"衣装変更 UI 表示",
-            @"");
 
         SteamLaunchCheck = cfg.Bind("General", "SteamLaunchCheck",
             true,
@@ -442,44 +552,6 @@ ZL/ZR を押下扱いにするしきい値。トリガーの遊びやドリフ�
 FastForward ホットキー押下中の Time.timeScale 倍率。",
                 new AcceptableValueRange<float>(1.0f, 240.0f)));
 
-        OverlayToggle = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
-            "General", "ToggleOverlay",
-            global::UnityEngine.InputSystem.Key.F12,
-            global::BunnyGarden2FixMod.Utils.ControllerButton.Start,
-            @"オーバーレイ表示切替",
-            @"フリーカメラの操作ガイドが対象です。",
-            @"ControllerModifier と同時押しが必要です。");
-
-        CaptureScreenshot = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
-            "General", "CaptureScreenshot",
-            global::UnityEngine.InputSystem.Key.P,
-            global::BunnyGarden2FixMod.Utils.ControllerButton.A,
-            @"スクリーンショット保存",
-            @"フリーカメラ中にゲーム UI・MOD オーバーレイを写さず BepInEx/screenshots フォルダへ PNG 出力します。",
-            @"ControllerModifier と同時押しが必要です。");
-
-        TimeStopToggle = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
-            "General", "ToggleTimeStop",
-            global::UnityEngine.InputSystem.Key.T,
-            global::BunnyGarden2FixMod.Utils.ControllerButton.B,
-            @"時間停止 ON/OFF",
-            @"フリーカメラ中の撮影構図決めなどに使用します。",
-            @"ControllerModifier と同時押しが必要です。");
-
-        FrameAdvance = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
-            "General", "FrameAdvance",
-            global::UnityEngine.InputSystem.Key.F,
-            global::BunnyGarden2FixMod.Utils.ControllerButton.None,
-            @"1 フレーム送り",
-            @"時間停止中のみ有効です。");
-
-        FastForward = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
-            "General", "FastForward",
-            global::UnityEngine.InputSystem.Key.G,
-            global::BunnyGarden2FixMod.Utils.ControllerButton.None,
-            @"早送りホールド",
-            @"押している間のみ有効。倍率は FastForwardSpeed で設定。");
-
         HideMoneyInSpecialScenes = cfg.Bind("HideUI", "HideInSpecialScenes",
             true,
             @"旅行・特別シーンで所持金 UI を非表示
@@ -495,6 +567,75 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             false,
             @"ラブカウンター(好感度ゲージ)を常時非表示");
 
+        FreeCamToggle = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
+            "Hotkey", "ToggleFreeCam",
+            global::UnityEngine.InputSystem.Key.F5,
+            global::BunnyGarden2FixMod.Utils.ControllerButton.Y,
+            @"フリーカメラ ON/OFF",
+            @"",
+            @"ControllerModifier と同時押しが必要です。");
+
+        FixedFreeCamToggle = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
+            "Hotkey", "ToggleFixedFreeCam",
+            global::UnityEngine.InputSystem.Key.F6,
+            global::BunnyGarden2FixMod.Utils.ControllerButton.X,
+            @"固定フリーカメラ ON/OFF",
+            @"フリーカメラ起動中にカメラ位置を固定します。フリーカメラ起動中のみ有効。",
+            @"ControllerModifier と同時押しが必要です。");
+
+        FreeCamDisplayModeToggle = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
+            "Hotkey", "ToggleFreeCamDisplayMode",
+            global::UnityEngine.InputSystem.Key.F4,
+            global::BunnyGarden2FixMod.Utils.ControllerButton.None,
+            @"フリーカメラの出力先切替",
+            @"FreeCamDisplayMode 設定の値を順番に切り替えます。フリーカメラ起動中のみ有効。",
+            @"ControllerModifier と同時押しが必要です。");
+
+        OverlayToggle = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
+            "Hotkey", "ToggleOverlay",
+            global::UnityEngine.InputSystem.Key.F12,
+            global::BunnyGarden2FixMod.Utils.ControllerButton.Start,
+            @"オーバーレイ表示切替",
+            @"フリーカメラの操作ガイドが対象です。",
+            @"ControllerModifier と同時押しが必要です。");
+
+        CaptureScreenshot = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
+            "Hotkey", "CaptureScreenshot",
+            global::UnityEngine.InputSystem.Key.P,
+            global::BunnyGarden2FixMod.Utils.ControllerButton.A,
+            @"スクリーンショット保存",
+            @"フリーカメラ中にゲーム UI・MOD オーバーレイを写さず BepInEx/screenshots フォルダへ PNG 出力します。",
+            @"ControllerModifier と同時押しが必要です。");
+
+        TimeStopToggle = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
+            "Hotkey", "ToggleTimeStop",
+            global::UnityEngine.InputSystem.Key.T,
+            global::BunnyGarden2FixMod.Utils.ControllerButton.B,
+            @"時間停止 ON/OFF",
+            @"フリーカメラ中の撮影構図決めなどに使用します。",
+            @"ControllerModifier と同時押しが必要です。");
+
+        FrameAdvance = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
+            "Hotkey", "FrameAdvance",
+            global::UnityEngine.InputSystem.Key.F,
+            global::BunnyGarden2FixMod.Utils.ControllerButton.None,
+            @"1 フレーム送り",
+            @"時間停止中のみ有効です。");
+
+        FastForward = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
+            "Hotkey", "FastForward",
+            global::UnityEngine.InputSystem.Key.G,
+            global::BunnyGarden2FixMod.Utils.ControllerButton.None,
+            @"早送りホールド",
+            @"押している間のみ有効。倍率は FastForwardSpeed で設定。");
+
+        CostumeChangerShow = new global::BunnyGarden2FixMod.Utils.HotkeyConfig(cfg,
+            "Hotkey", "Show",
+            global::UnityEngine.InputSystem.Key.F7,
+            global::BunnyGarden2FixMod.Utils.ControllerButton.None,
+            @"衣装変更 UI 表示",
+            @"");
+
     }
 
     // ─── UIEntries: F9 設定パネルが foreach で描画する ──
@@ -503,7 +644,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Graphics",
-            Order    = 0,
             Label    = "FPS 上限",
             Desc     = "0 で上限を撤廃します。",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -516,7 +656,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Graphics",
-            Order    = 10,
             Label    = "VSync を強制 ON",
             Desc     = "QualitySettings.vSyncCount = 1 を強制します。\nフレームレートがモニターのリフレッシュレートに同期され、ティアリングが防止されます。\n有効時は FrameRate 設定より VSync が優先されます。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -525,7 +664,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Graphics",
-            Order    = 20,
             Label    = "排他的フルスクリーンを強制",
             Desc     = "Windows DWM をバイパスし、複数モニター接続時の FPS 低下が改善される場合があります。\nウィンドウモード (1080p / 720p) では無効です。\nAlt+Tab でのウィンドウ切り替え時に画面が一瞬暗転する場合があります。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -534,7 +672,15 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Graphics",
-            Order    = 30,
+            Label    = "アンチエイリアシング",
+            Desc     = "Off / FXAA / TAA / MSAA2x / MSAA4x / MSAA8x。\n右にいくほど画質が向上しますが動作が重くなります。\n",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Dropdown,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.AntiAliasingType)),
+            Accessor        = new global::BunnyGarden2FixMod.Patches.Settings.EnumAccessor<global::BunnyGarden2FixMod.AntiAliasingType>(() => AntiAliasing),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Graphics",
             Label    = "色収差(画面端のにじみ)を無効化",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -543,7 +689,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Graphics",
-            Order    = 40,
             Label    = "被写界深度(画面の一部がぼやける効果)を無効化",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -552,7 +697,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Graphics",
-            Order    = 50,
             Label    = "フルスクリーンでウルトラワイド比率を使う",
             Desc     = "ゲームプレイ中のみモニターのネイティブ比率で表示します。\nタイトル画面やメニュー画面は従来どおり 16:9 のままです。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -561,7 +705,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Camera",
-            Order    = 60,
             Label    = "フリーカメラのマウス感度",
             Desc     = "",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -574,7 +717,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Camera",
-            Order    = 70,
             Label    = "フリーカメラの基本移動速度",
             Desc     = "",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -587,7 +729,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Camera",
-            Order    = 80,
             Label    = "フリーカメラの高速移動速度 (Shift 押下中)",
             Desc     = "",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -600,7 +741,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Camera",
-            Order    = 90,
             Label    = "フリーカメラの低速移動速度 (Ctrl 押下中)",
             Desc     = "",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -613,7 +753,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Camera",
-            Order    = 100,
             Label    = "フリーカメラ起動中にゲーム本体の Canvas を非表示",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -622,7 +761,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Camera",
-            Order    = 110,
             Label    = "フリーカメラ操作にゲームパッド入力を使用",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -630,8 +768,16 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
+            Category = "Camera",
+            Label    = "フリーカメラの出力先",
+            Desc     = "フリーカメラの映像をどこに表示するかを選択します。\n排他的フルスクリーンモードの場合は、MainScreen が使用されます。\nMainScreen: メイン画面（通常のフリーカメラ）\nPiP: ピクチャー・イン・ピクチャー\nDisplay2: サブモニター（モニター2台以上のときのみ）\n",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Dropdown,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.FreeCamDisplayMode)),
+            Accessor        = new global::BunnyGarden2FixMod.Patches.Settings.EnumAccessor<global::BunnyGarden2FixMod.FreeCamDisplayMode>(() => FreeCamDisplayMode),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
             Category = "Animation",
-            Order    = 120,
             Label    = "バーの背景キャスト 2 人の会話リアクションモーションを多様化",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -640,7 +786,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Animation",
-            Order    = 130,
             Label    = "一部モーションでスカートが体にめり込む現象を補正",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -649,7 +794,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Cheki",
-            Order    = 140,
             Label    = "高解像度チェキを有効化",
             Desc     = "チェキ（撮影写真）の保存解像度を Size で指定した値に変更します。false で本体既定（320x320）。\n互換性: 本体セーブには常に 320x320 版が保存されるため、MOD を外しても主セーブは破損しません。\n高解像度版は MOD 独自のサイドカーファイル（主セーブ + .exmod）に格納します。\n保存先は `BepInEx/data/net.noeleve.BunnyGarden2FixMod/`（Steam Cloud Save 対象外）。\nPC 移行時はこのフォルダを手動でコピーしてください。\nスロット対応: セーブスロット単位で高解像度データを分離管理します。\n副作用: 高解像度化でメモリ／セーブサイズが増加します（1024 時: 約 48MB/12 枚）。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -658,7 +802,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Cheki",
-            Order    = 150,
             Label    = "チェキ解像度",
             Desc     = "正方形サイズ（ピクセル）。HighResEnabled が false の場合は無視されます（本体既定の 320 が使用されます）。\nPNG で実測 1〜5MB/枚 程度に収まります。\n",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -671,7 +814,15 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Cheki",
-            Order    = 160,
+            Label    = "チェキ画像フォーマット",
+            Desc     = "PNG : 無劣化圧縮。サイズ 1/5〜1/20・エンコード 50〜200ms/枚。既定。\nJPG : 劣化圧縮。サイズ 1/20〜1/50・エンコード 30〜100ms/枚。\nエンコードはシャッター時に 1 度のみ走ります。読み込みは magic byte による自動判別です。\n",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Dropdown,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.ChekiImageFormat)),
+            Accessor        = new global::BunnyGarden2FixMod.Patches.Settings.EnumAccessor<global::BunnyGarden2FixMod.ChekiImageFormat>(() => ChekiFormat),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Cheki",
             Label    = "JPG 品質",
             Desc     = "ImageFormat=JPG のときの品質（1〜100）。値が小さいほどサイズは小さく画質は粗くなります。",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -684,7 +835,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Cheki",
-            Order    = 170,
             Label    = "エンディング中に撮影済みのチェキをスライドショー表示",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -693,7 +843,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Cheat",
-            Order    = 180,
             Label    = "キャスト出勤順序変更（バー入店前に F1 で編集）",
             Desc     = "F1 で編集モードを開始し、数字キー（1〜5）でキャストを選択・入れ替えます。",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -702,7 +851,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Cheat",
-            Order    = 190,
             Label    = "鉄骨渡りミニゲームで落下しなくなる（チート）",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -711,7 +859,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Cheat",
-            Order    = 200,
             Label    = "ギャンブルで負けなくなる（チート）",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -720,7 +867,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "Cheat",
-            Order    = 210,
             Label    = "好感度ヒント表示",
             Desc     = "会話選択肢・ドリンク・フードの正解をゲーム内に表示します。\n【会話選択肢】選択肢テキストの先頭に記号が追加されます。\n  ★ : 好感度UP（正解）\n  ▼ : 好感度DOWN（酔い選択肢だが現在の状況では効果なし）\n【ドリンク・フード】アイテムの背景色が変化します。\n  緑 : キャストのお気に入り（AddFavoriteLikability > 0）\n  黄 : 今日の旬アイテム（ボーナスあり）\n  赤 : キャストが嫌いなもの（AddFavoriteLikability < 0）\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -728,8 +874,15 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
+            Category = "Cheat",
+            Label    = "バニー系ドリンクを常時メニューに追加",
+            Desc     = "BUNNY_TRAP / BUNNY_MAX / BUNNY_PUNCH を進行状況に関わらず常時注文可能にします。",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => BunnyDrinksEnabled),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
             Category = "CostumeChanger",
-            Order    = 220,
             Label    = "衣装変更を有効化（要再起動）",
             Desc     = "衣装変更 UI とパッチを有効化します。\nOFF→ON でパッチ適用が必要なため、変更は再起動後に反映されます。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -738,7 +891,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
-            Order    = 230,
             Label    = "ゲーム指定衣装を優先",
             Desc     = "試着室などゲームが特定の衣装を強制するシーンでは MOD 側の衣装変更を一時停止します。\nゲーム内のイベントと衣装の競合を防げます。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -747,9 +899,16 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
-            Order    = 240,
+            Label    = "衣装変更状態を保存する",
+            Desc     = "Wardrobe で変更した衣装の状態を保存し、ゲーム再起動後も復元します。\nOFF にすると以降の変更は保存されません（既存の保存内容は残るため、ON に戻すと復元されます）。\nSteam Cloud 対象外。\n",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => PersistCostumeOverrides),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
             Label    = "ストッキング 押出し量 (m)",
-            Desc     = "水着+ストッキング適用時、stocking 頂点を肌より外側へ保つ最小距離（メートル）。\n押し出すと水着の食い込み（タイトな演出）が再現できますが、stocking が水着を貫通します。\n0 で無効化。デフォルト 0 (無効)。\n",
+            Desc     = "水着+ストッキング適用時、ストッキングを肌よりどれだけ外側に出すかを指定します（メートル）。\n値を増やすと水着の食い込みが再現できますが、ストッキングが水着を貫通します。0 で無効。\n",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -760,9 +919,8 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
-            Order    = 250,
-            Label    = "肌 押込み量 (m)",
-            Desc     = "水着+ストッキング適用時、肌（mesh_skin_lower）の頂点を「stocking 押し出し後表面より内側」に\n保つ目標距離（メートル）。stocking と肌が z-fighting している箇所では、まず肌を\nstocking 表面まで引っ込めてから、さらにこの距離だけ内側に押し込みます。\n押し込むと肌の貫通はなくなりますが、水着の食い込み（タイトな演出）が再現できません。\n0 で無効化。デフォルト 0.001 (1mm)。\n",
+            Label    = "ストッキング 肌押込み量 (m)",
+            Desc     = "水着+ストッキング適用時、肌をストッキングよりどれだけ内側に押し込むかを指定します（メートル）。\n肌のチラつき（肌とストッキングの干渉）が見える場合に大きくしてください。\nただし水着の食い込み演出は弱まります。0 で無効。\n",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -773,9 +931,8 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
-            Order    = 260,
-            Label    = "肌押込み フェード半径 (m)",
-            Desc     = "肌の押し込み量を、隣接 mesh（mesh_skin_upper 等）からの距離で線形フェードさせる半径（メートル）。\n距離 0 で押し込み 0、半径以上で 100%。境界での段差を防ぎます。0 で無効化（一様押し込み）。\nデフォルト 0.001 (1mm)。\n",
+            Label    = "ストッキング 肌押込み フェード半径 (m)",
+            Desc     = "肌の押し込みを、上半身などとの境界で滑らかにフェードさせる距離です（メートル）。\n境界に段差が見える場合に大きくしてください。0 で無効（境界無視で一様に押し込む）。\n",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -786,9 +943,8 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
-            Order    = 270,
-            Label    = "BlendShape フェード半径 (m)",
-            Desc     = "skin_stocking 系 blendShape (skin_stocking / skin_socks / skin_stocking_lower) の delta 自体を、\n隣接 mesh（mesh_skin_upper 等）からの距離で線形フェードさせる半径（メートル）。\n距離 0 で blendShape 効果 0、半径以上で 100%。境界（ウエスト等）の段差を解消します。\n0 で無効化（blendShape 効果は全頂点 100%）。デフォルト 0.001 (1mm)。\n",
+            Label    = "ストッキング 肌形状フェード半径 (m)",
+            Desc     = "ストッキング由来の肌形状補正を、ウエストなどの境界で滑らかにフェードさせる距離です（メートル）。\n境界の段差が気になる場合に大きくしてください。0 で無効（補正は全身一様）。\n",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -799,25 +955,142 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
-            Order    = 280,
+            Label    = "上衣 距離保存 検索範囲 (m)",
+            Desc     = "別キャラ上衣を当てたときの体型補正の有効範囲です（メートル）。\n小さくするとワンピース型衣装の下半身が補正されず、大きくしすぎると\n服から遠い箇所まで体に張り付いて不自然になります。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0.01f,
+            SliderMax  = 0.5f,
+            SliderStep = 0.01f,
+            Format     = "{0:F3}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => TopsDistancePreserveRange, 0.01f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "上衣 肌からの最小距離 (m)",
+            Desc     = "元キャラ側で衣装が肌にめり込んでいる箇所を補正する安全マージンです（メートル）。\n当てた服の一部が肌にめり込んで見える場合に大きくしてください。\n0 で無効（めり込みは未補正のまま反映されます）。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.01f,
+            SliderStep = 0.0001f,
+            Format     = "{0:F4}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => TopsSkinMinOffset, 0.0001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "上衣 肌サンプル半径 (m)",
+            Desc     = "体型補正で参照する肌のサンプリング半径です（メートル）。\n鎖骨・肩甲骨など凹凸の多い箇所で補正がばらつく場合に大きくしてください。\n0 で最小近傍 3 点を使用。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.1f,
+            SliderStep = 0.001f,
+            Format     = "{0:F3}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => TopsSkinSampleRadius, 0.001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "上衣 肌 weight 転送 falloff (m)",
+            Desc     = "関節を曲げたときに肌密着部の服が肌から剥離・突き抜けないよう、\n肌の動きに追随させる範囲です（メートル）。\n肩・肘などで服が肌から浮いて見える場合に大きくしてください。\n0 で無効。推奨初期値: 0.020 m。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.05f,
+            SliderStep = 0.001f,
+            Format     = "{0:F3}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => TopsSkinWeightFalloff, 0.001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "上衣 肌押込み量 (m)",
+            Desc     = "別キャラ上衣を当てたとき、肌が服を貫通する箇所を内側に押し込む距離です（メートル）。\n肌のチラつき（肌と服の干渉）が見える場合に大きくしてください。0 で無効。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.01f,
+            SliderStep = 0.0001f,
+            Format     = "{0:F4}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => TopsSkinShrink, 0.0001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "上衣 肌押込み フェード半径 (m)",
+            Desc     = "肌の押し込みを、顔・首回りで滑らかにフェードさせる距離です（メートル）。\n首元で押し込みが顔まで波及する場合に大きくしてください。\n0 で無効（顔境界無視で一様に押し込む）。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.01f,
+            SliderStep = 0.0001f,
+            Format     = "{0:F4}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => TopsSkinShrinkFalloffRadius, 0.0001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "上衣 肌押込み cloth サンプル半径 (m)",
+            Desc     = "肌押込みの参照範囲です（メートル）。\nフリル・袖などで押し込みがガタつく場合や、ウエストの縫い目で段差が見える場合に\n大きくしてください。0 で 10mm 固定（狭い既定）。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.1f,
+            SliderStep = 0.001f,
+            Format     = "{0:F3}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => TopsSkinShrinkSampleRadius, 0.001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "下衣 肌押込み量 (m)",
+            Desc     = "別キャラ下衣（スカート等）を当てたとき、肌がスカートを貫通する箇所を内側に押し込む距離です（メートル）。\n腰・腿・膝下のチラつきが見える場合に大きくしてください。\n0 で無効。最大 1cm 制限（過大値で脚が消える事故を防ぐため）。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.01f,
+            SliderStep = 0.0001f,
+            Format     = "{0:F4}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => BottomsSkinShrink, 0.0001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "下衣 肌押込み フェード半径 (m)",
+            Desc     = "肌の押し込みを、顔・首回りで滑らかにフェードさせる距離です（メートル）。\n首元で押し込みが顔まで波及する場合に大きくしてください。\n0 で無効（顔境界無視で一様に押し込む）。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.01f,
+            SliderStep = 0.0001f,
+            Format     = "{0:F4}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => BottomsSkinShrinkFalloffRadius, 0.0001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "下衣 肌押込み skirt サンプル半径 (m)",
+            Desc     = "肌押込みの参照範囲です（メートル）。\nスカートのフリルなどで押し込みがガタつく場合や、ウエストの縫い目で段差が見える場合に\n大きくしてください。0 で 10mm 固定（狭い既定）。\n",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.1f,
+            SliderStep = 0.001f,
+            Format     = "{0:F3}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => BottomsSkinShrinkSampleRadius, 0.001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
             Label    = "水着・バニーガール衣装でも下着を表示",
-            Desc     = "ゲーム本体は通常衣装専用の panties slot にしか反応しないため、Mod 側で水着/バニー用スロットもフォールバック検出します。\n差し替え後の Material は通常衣装用テクスチャなので、UV 不一致で見た目が崩れる場合は OFF にしてください。\n",
+            Desc     = "水着・バニー衣装でもパンツが表示されるようにします（通常はゲーム側の制限で非表示）。\nテクスチャは通常衣装用のため、UV 不一致で見た目が崩れる場合は OFF にしてください。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => PantiesAltSlotMatch),
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
-            Order    = 290,
             Label    = "Mod で下着を指定したキャストのみ適用 (OFF で全員)",
-            Desc     = "ON  : Mod で下着を明示選択したキャストのみフォールバックを適用。他キャストはバニラ挙動（水着/バニーで肌色）。\nOFF : 常時全キャストに適用。ゲーム本体由来の ReloadPanties でも水着/バニーに通常下着が出ます。\nPantiesAltSlotMatch=OFF のときはこの設定は無視されます。\n",
+            Desc     = "ON  : Mod で下着を選択したキャストのみ適用（他キャストは水着/バニー時に通常通り肌色）。\nOFF : 全キャストに常時適用（水着/バニーでも通常下着が出ます）。\nPantiesAltSlotMatch=OFF のときはこの設定は無視されます。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => PantiesAltSlotOverrideOnly),
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
-            Order    = 300,
             Label    = "キャストのストッキング(パンスト)を非表示",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -826,7 +1099,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "General",
-            Order    = 310,
             Label    = "MOD UI スケール",
             Desc     = "Mod 提供の UI（衣装変更 / 設定パネル / 出勤順 など）の表示倍率。ゲーム本体 UI には影響しません。\n変更はパネルを閉じて開き直すと反映されます。\n",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -839,7 +1111,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "General",
-            Order    = 320,
             Label    = "タップでボイスを継続",
             Desc     = "会話送り（タップ／オート／スキップ）でボイスを途中停止しません。\n次の台詞のボイスで自然に上書きされるか、最後まで再生されます。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -848,7 +1119,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "General",
-            Order    = 330,
             Label    = "コントローラ ZL/ZR デッドゾーン",
             Desc     = "ZL/ZR を押下扱いにするしきい値。トリガーの遊びやドリフトがある場合に上げてください。",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -861,7 +1131,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "General",
-            Order    = 340,
             Label    = "スクリーンショット解像度倍率",
             Desc     = "1 で通常のスクリーンショットと同じ解像度、2 で倍の解像度になります。",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -874,7 +1143,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "General",
-            Order    = 350,
             Label    = "早送り倍率",
             Desc     = "FastForward ホットキー押下中の Time.timeScale 倍率。",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
@@ -887,7 +1155,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "HideUI",
-            Order    = 360,
             Label    = "旅行・特別シーンで所持金 UI を非表示",
             Desc     = "対象シーン:\n  - 旅行シーン\n  - 恋愛に関する特別なシーン\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -896,7 +1163,6 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "HideUI",
-            Order    = 370,
             Label    = "画面下のボタンガイド(操作ヒント)を常時非表示",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
@@ -905,11 +1171,91 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "HideUI",
-            Order    = 380,
             Label    = "ラブカウンター(好感度ゲージ)を常時非表示",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => HideLikabilityGauge),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Hotkey",
+            Label    = "フリーカメラ ON/OFF",
+            Desc     = "",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,
+            HotkeyProvider  = () => FreeCamToggle,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Hotkey",
+            Label    = "固定フリーカメラ ON/OFF",
+            Desc     = "フリーカメラ起動中にカメラ位置を固定します。フリーカメラ起動中のみ有効。",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,
+            HotkeyProvider  = () => FixedFreeCamToggle,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Hotkey",
+            Label    = "フリーカメラの出力先切替",
+            Desc     = "FreeCamDisplayMode 設定の値を順番に切り替えます。フリーカメラ起動中のみ有効。",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,
+            HotkeyProvider  = () => FreeCamDisplayModeToggle,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Hotkey",
+            Label    = "オーバーレイ表示切替",
+            Desc     = "フリーカメラの操作ガイドが対象です。",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,
+            HotkeyProvider  = () => OverlayToggle,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Hotkey",
+            Label    = "スクリーンショット保存",
+            Desc     = "フリーカメラ中にゲーム UI・MOD オーバーレイを写さず BepInEx/screenshots フォルダへ PNG 出力します。",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,
+            HotkeyProvider  = () => CaptureScreenshot,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Hotkey",
+            Label    = "時間停止 ON/OFF",
+            Desc     = "フリーカメラ中の撮影構図決めなどに使用します。",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,
+            HotkeyProvider  = () => TimeStopToggle,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Hotkey",
+            Label    = "1 フレーム送り",
+            Desc     = "時間停止中のみ有効です。",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,
+            HotkeyProvider  = () => FrameAdvance,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Hotkey",
+            Label    = "早送りホールド",
+            Desc     = "押している間のみ有効。倍率は FastForwardSpeed で設定。",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,
+            HotkeyProvider  = () => FastForward,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Hotkey",
+            Label    = "衣装変更 UI 表示",
+            Desc     = "",
+            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,
+            HotkeyProvider  = () => CostumeChangerShow,
+            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),
         },
     };
 

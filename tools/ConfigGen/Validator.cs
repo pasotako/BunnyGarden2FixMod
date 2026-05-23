@@ -63,8 +63,8 @@ public static class Validator
                     errors.Add($"[{e.Name}] type=hotkey must not specify 'enumType' (Key + ControllerButton are fixed)");
                 if (e.Range != null)
                     errors.Add($"[{e.Name}] type=hotkey must not specify 'range'");
-                if (e.Ui != null)
-                    errors.Add($"[{e.Name}] type=hotkey must not specify 'ui' (HotkeyConfig is not on the F9 panel)");
+                if (e.Ui != null && e.Ui.Kind != "keybinding")
+                    errors.Add($"[{e.Name}] type=hotkey only allows ui.kind=keybinding (got: {e.Ui.Kind})");
                 if (string.IsNullOrEmpty(e.DefaultKey))
                     errors.Add($"[{e.Name}] type=hotkey requires defaultKey (e.g. F12, P, T)");
                 else if (!IdentifierPattern.IsMatch(e.DefaultKey))
@@ -98,9 +98,9 @@ public static class Validator
 
             if (e.Ui != null)
             {
-                var validKinds = new[] { "toggle", "slider" };
+                var validKinds = new[] { "toggle", "slider", "dropdown", "keybinding" };
                 if (!validKinds.Contains(e.Ui.Kind))
-                    errors.Add($"[{e.Name}] ui.kind must be toggle/slider (got: {e.Ui.Kind})");
+                    errors.Add($"[{e.Name}] ui.kind must be toggle/slider/dropdown/keybinding (got: {e.Ui.Kind})");
 
                 if (e.Ui.Kind == "toggle" && e.Type != "bool")
                     errors.Add($"[{e.Name}] ui.kind=toggle requires type=bool (got: {e.Type})");
@@ -115,6 +115,34 @@ public static class Validator
                         errors.Add($"[{e.Name}] ui.kind=slider requires ui.step");
                     if (string.IsNullOrEmpty(e.Ui.Format))
                         errors.Add($"[{e.Name}] ui.kind=slider requires ui.format");
+                }
+
+                if (e.Ui.Kind == "dropdown")
+                {
+                    if (e.Type != "enum")
+                        errors.Add($"[{e.Name}] ui.kind=dropdown requires type=enum (got: {e.Type})");
+                    if (string.IsNullOrEmpty(e.EnumType))
+                        errors.Add($"[{e.Name}] ui.kind=dropdown requires enumType");
+                    if (e.Range != null)
+                        errors.Add($"[{e.Name}] ui.kind=dropdown must not specify range");
+                    if (e.Ui.Step != null)
+                        errors.Add($"[{e.Name}] ui.kind=dropdown must not specify ui.step");
+                    if (!string.IsNullOrEmpty(e.Ui.Format))
+                        errors.Add($"[{e.Name}] ui.kind=dropdown must not specify ui.format");
+                }
+
+                if (e.Ui.Kind == "keybinding")
+                {
+                    if (e.Type != "hotkey")
+                        errors.Add($"[{e.Name}] ui.kind=keybinding requires type=hotkey (got: {e.Type})");
+                    if (e.Range != null)
+                        errors.Add($"[{e.Name}] ui.kind=keybinding must not specify range");
+                    if (e.Ui.Step != null)
+                        errors.Add($"[{e.Name}] ui.kind=keybinding must not specify ui.step");
+                    if (!string.IsNullOrEmpty(e.Ui.Format))
+                        errors.Add($"[{e.Name}] ui.kind=keybinding must not specify ui.format");
+                    if (!string.IsNullOrEmpty(e.EnumType))
+                        errors.Add($"[{e.Name}] ui.kind=keybinding must not specify enumType (Key + ControllerButton are fixed)");
                 }
             }
         }

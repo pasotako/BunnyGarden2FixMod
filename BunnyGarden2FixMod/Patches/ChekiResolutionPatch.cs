@@ -1,3 +1,4 @@
+using BunnyGarden2FixMod.Patches.FreeCamera;
 using BunnyGarden2FixMod.Utils;
 using GB.Save;
 using HarmonyLib;
@@ -105,7 +106,7 @@ internal static class ChekiHiResSidecar
 /// </para>
 ///
 /// <para>
-/// <see cref="Plugin.ConfigChekiHighResEnabled"/> が false のときは元処理をそのまま走らせる
+/// <see cref="Configs.ChekiHighResEnabled"/> が false のときは元処理をそのまま走らせる
 /// （Prefix が true を返す → vanilla が実行される）。
 /// </para>
 /// </summary>
@@ -142,7 +143,7 @@ public static class ChekiResolutionPatch
 
     private static bool Prefix(Saves __instance, ref IEnumerator __result)
     {
-        if (!Plugin.ConfigChekiHighResEnabled.Value)
+        if (!Configs.ChekiHighResEnabled.Value)
         {
             // 既定 OFF: vanilla 挙動。ホルダーは空に戻しておく（古い hi-res が残っていると誤使用の元）。
             ChekiHiResSidecar.DestroyIfAny();
@@ -154,7 +155,7 @@ public static class ChekiResolutionPatch
 
     private static IEnumerator CaptureDualRes(Saves self)
     {
-        int hiSize = Mathf.Clamp(Plugin.ConfigChekiSize.Value, SizeLowerClamp, SizeUpperClamp);
+        int hiSize = Mathf.Clamp(Configs.ChekiSize.Value, SizeLowerClamp, SizeUpperClamp);
 
         if (!s_loggedApplied)
         {
@@ -186,8 +187,21 @@ public static class ChekiResolutionPatch
 
         yield return new WaitForEndOfFrame();
 
-        // 画面の実アスペクト比でキャプチャを取得。
-        s_captureRef(self) = ScreenCapture.CaptureScreenshotAsTexture();
+        // フリーカメラがアクティブかつDisplay2を使用する時のみ，Cameraからのキャプチャを使用する
+        bool useMainCameraCapture = Configs.FreeCamDisplayMode.Value == FreeCamDisplayMode.Display2 &&
+                                    FreeCameraManager.IsActive;
+
+        if (useMainCameraCapture)
+        {
+            // メインカメラの現在の画像を直接取得
+            s_captureRef(self) = CaptureMainCameraTexture();
+        }
+        else
+        {
+            // スクリーンショットから画像を取得
+            s_captureRef(self) = ScreenCapture.CaptureScreenshotAsTexture();
+        }
+
         var capture = s_captureRef(self);
         float captureAspect = (float)capture.width / Mathf.Max(1, capture.height);
 
@@ -266,4 +280,49 @@ public static class ChekiResolutionPatch
             Object.Destroy(hiRT);
         }
     }
+
+    // Display2を用いているときは，メインカメラの画像をキャプチャする
+    private static Texture2D CaptureMainCameraTexture()
+    {
+        Camera targetCam = null;
+        foreach (var cam in Camera.allCameras)
+        {
+            if (cam.targetDisplay == 0 && cam.enabled)
+            {
+                targetCam = cam;
+                break;
+            }
+        }
+
+        if (targetCam == null) targetCam = Camera.main;
+        if (targetCam == null) return null;
+
+        int width = targetCam.pixelWidth;
+        int height = targetCam.pixelHeight;
+
+        var tempRT = RenderTexture.GetTemporary(
+            width, height, 24,
+            RenderTextureFormat.Default,
+            RenderTextureReadWrite.Default);
+        var prevRT = targetCam.targetTexture;
+        var prevActive = RenderTexture.active;
+
+        targetCam.targetTexture = tempRT;
+        targetCam.Render();
+
+        RenderTexture.active = tempRT;
+
+        bool linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
+        Texture2D tex = new Texture2D(width, height, TextureFormat.RGBA32, false, linear);
+
+        tex.ReadPixels(new Rect(0, 0, width, height), 0, 0, false);
+        tex.Apply();
+
+        targetCam.targetTexture = prevRT;
+        RenderTexture.active = prevActive;
+        RenderTexture.ReleaseTemporary(tempRT);
+
+        return tex;
+    }
+
 }

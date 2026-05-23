@@ -117,38 +117,50 @@ public static class CodeEmitter
         sb.AppendLine("    public static System.Collections.Generic.IReadOnlyList<global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta> UIEntries { get; } = new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta[]");
         sb.AppendLine("    {");
 
-        int uiIndex = 0;
         foreach (var e in entries)
         {
             if (e.Ui == null) continue;
-            EmitOneUIEntry(sb, e, uiIndex);
-            uiIndex++;
+            EmitOneUIEntry(sb, e);
         }
 
         sb.AppendLine("    };");
         sb.AppendLine();
     }
 
-    private static void EmitOneUIEntry(StringBuilder sb, ConfigEntryDef e, int uiIndex)
+    private static void EmitOneUIEntry(StringBuilder sb, ConfigEntryDef e)
     {
         var labelLit = ToCSharpStringLiteral(e.Label);
         var categoryLit = ToCSharpStringLiteral(e.Section);
-        // ui.order 未指定時は YAML 宣言順 (UI エントリ間の) に基づく値をフォールバック。
-        // 同一 section 内の相対順序は宣言順で保たれる。
-        var order = e.Ui!.Order ?? (uiIndex * 10);
 
         sb.AppendLine("        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta");
         sb.AppendLine("        {");
         var descLit = ToCSharpStringLiteral(e.Description ?? string.Empty);
         sb.AppendLine($"            Category = {categoryLit},");
-        sb.AppendLine($"            Order    = {order},");
         sb.AppendLine($"            Label    = {labelLit},");
         sb.AppendLine($"            Desc     = {descLit},");
 
-        if (e.Ui.Kind == "toggle")
+        if (e.Ui!.Kind == "toggle")
         {
             sb.AppendLine("            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,");
             sb.AppendLine($"            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => {e.Name}),");
+        }
+        else if (e.Ui.Kind == "dropdown")
+        {
+            // enum メンバ列挙はランタイムで Enum.GetNames を呼ぶ。
+            // EnumAccessor<T> 内の Enum.GetValues と同一順序が保証されるため index ズレが起きない。
+            var enumType = e.EnumType!;
+            sb.AppendLine("            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Dropdown,");
+            sb.AppendLine($"            DropdownOptions = global::System.Enum.GetNames(typeof(global::{enumType})),");
+            sb.AppendLine($"            Accessor        = new global::BunnyGarden2FixMod.Patches.Settings.EnumAccessor<global::{enumType}>(() => {e.Name}),");
+        }
+        else if (e.Ui.Kind == "keybinding")
+        {
+            // hotkey 専用: HotkeyProvider 経由で KeyConfig / ButtonConfig に直接アクセス。
+            // DropdownOptions は Pad ボタン側で使う (ControllerButton 列挙)。
+            // Accessor は KeyBinding 行では未使用 (null のまま)。
+            sb.AppendLine("            Kind            = global::BunnyGarden2FixMod.Patches.Settings.UIKind.KeyBinding,");
+            sb.AppendLine($"            HotkeyProvider  = () => {e.Name},");
+            sb.AppendLine("            DropdownOptions = global::System.Enum.GetNames(typeof(global::BunnyGarden2FixMod.Utils.ControllerButton)),");
         }
         else // slider
         {

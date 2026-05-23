@@ -1,4 +1,5 @@
 using BepInEx.Configuration;
+using BunnyGarden2FixMod.Patches.Settings;
 using UnityEngine.InputSystem;
 
 #nullable enable
@@ -40,7 +41,7 @@ public class HotkeyConfig
     public override string ToString()
     {
         string? keyLabel = KeyConfig == null || KeyConfig.Value == Key.None ? null : KeyConfig.Value.ToString();
-        string? buttonLabel = GetControllerBindingLabel(Plugin.ConfigControllerModifier.Value, ButtonConfig?.Value);
+        string? buttonLabel = GetControllerBindingLabel(Configs.ControllerModifier.Value, ButtonConfig?.Value);
 
         if (keyLabel != null && buttonLabel != null)
             return $"{keyLabel} / {buttonLabel}";
@@ -50,10 +51,14 @@ public class HotkeyConfig
 
     public bool IsHeld()
     {
+        // キーバインドキャプチャ中 / キャプチャ確定直後 (SuppressGameInput 期間) は押下判定を無効化。
+        // 確定したキーが同フレームでホットキーとして発火する誤動作を防ぐ。
+        if (SettingsController.ShouldSuppressHotkey()) return false;
+
         if (KeyConfig != null && Keyboard.current?[KeyConfig.Value].isPressed == true)
             return true;
 
-        if (ButtonConfig != null && GamepadHelper.IsHeld(Plugin.ConfigControllerModifier.Value) &&
+        if (ButtonConfig != null && GamepadHelper.IsHeld(Configs.ControllerModifier.Value) &&
             GamepadHelper.IsHeld(ButtonConfig.Value))
         {
             return true;
@@ -64,18 +69,25 @@ public class HotkeyConfig
 
     public bool IsTriggered()
     {
+        // キーバインドキャプチャ中 / キャプチャ確定直後 (SuppressGameInput 期間) は押下判定を無効化
+        if (SettingsController.ShouldSuppressHotkey()) return false;
         return IsKeyboardTriggered() || IsControllerTriggered();
     }
 
     public bool IsKeyboardTriggered()
     {
+        // キーバインドキャプチャ中 / キャプチャ確定直後 (SuppressGameInput 期間) は押下判定を無効化
+        if (SettingsController.ShouldSuppressHotkey()) return false;
         return KeyConfig != null && Keyboard.current?[KeyConfig.Value].wasPressedThisFrame == true;
     }
 
     public bool IsControllerTriggered()
     {
+        // キーバインドキャプチャ中 / キャプチャ確定直後 (SuppressGameInput 期間) は押下判定を無効化
+        if (SettingsController.ShouldSuppressHotkey()) return false;
+
         if (ButtonConfig != null &&
-            IsControllerComboTriggered(Plugin.ConfigControllerModifier.Value, ButtonConfig.Value))
+            IsControllerComboTriggered(Configs.ControllerModifier.Value, ButtonConfig.Value))
         {
             Plugin.SuppressGameInputTemporarily();
             return true;

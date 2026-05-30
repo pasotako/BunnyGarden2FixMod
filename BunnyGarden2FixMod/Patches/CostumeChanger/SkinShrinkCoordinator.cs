@@ -27,29 +27,38 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 ///   - <see cref="OnSceneUnloaded"/> 経路で <see cref="ClearScene"/>
 ///
 /// 設計上の挙動 (素 mesh の意味):
-///   - mesh_skin_upper の素は Tops 有無で異なる:
-///       Tops 有: target Babydoll asset (Tops Apply (d) で swap 済み)
-///       Tops 無: target 元 costume asset
+///   - mesh_skin_upper の素は「上半身を Babydoll 基準で扱うか」で異なる:
+///       Tops override 有: target Babydoll asset (Tops Apply (d) で swap 済み)
+///       Tops 無 + BreastFlatten>0 (Bottoms-only 含む): target Babydoll asset
+///         (BottomsLoader.ApplySkinUpperBabydollPhase で swap 済み。BreastFlatten の cloth が
+///          flatten 済 Babydoll proxy 基準のため skin も Babydoll に揃える)
+///       上記いずれでもない: target 元 costume asset
 ///   - mesh_skin_lower の素は常に target 元 costume asset (誰も swap しない)
 ///   - Bottoms 単独 → Tops 後追い override で skin_upper の素が target 元 → Babydoll に切替わる。
 ///     これは Tops 設計に内在する挙動で、Coordinator 化で初めて起きるわけではない。
+///   - swap 主体 (Tops / BreastFlatten-Bottoms) は swap / un-swap と連動して
+///     <see cref="RebaseOriginalSkinUpper"/> で OriginalSkinUpper を stable asset に同期すること。
 ///
 /// API 契約:
 ///   - <see cref="UnregisterTops"/> 呼出前に呼出元は mesh_skin_upper.sharedMesh を
-///     target 元 costume asset (= Tops snapshot.OriginalMesh) に戻し終えていること。
+///     target 元 costume asset (= NativeSmrRegistry.TryGet(smr)) に戻し終えていること。
 ///     <see cref="TopsLoader.RestoreFor"/> 末尾で呼ぶのはこの前提を満たす。
 ///   - <see cref="RegisterTops"/> 呼出時に mesh_skin_upper.sharedMesh が Babydoll asset
 ///     になっていること (Tops Apply (d) 完了済)。Apply 末尾で呼ぶのはこの前提を満たす。
 ///   - すべての Register/Unregister は character GameObject の component が live な状態で呼ぶ
 ///     (<see cref="ClearScene"/> 後は呼ばない)。
 ///
-/// skin_lower 側に対称な API (RestoreSkinLowerToOriginal 相当) は **意図的に未提供**:
-/// <see cref="TopsLoader"/>/<see cref="BottomsLoader"/> どちらも Apply で skin_lower SMR を
-/// CaptureSnapshotIfFirst していないため、transient pushed Mesh が snapshot に焼き込まれる
-/// 経路がない (本 Coordinator が skin_lower.sharedMesh を transient で書き換えても snapshot 化
-/// されないので live tune cycle で destroyed Mesh を sharedMesh に書き戻す事故は起きない)。
-/// 将来 BottomsLoader.Apply 等で skin_lower の snapshot capture を追加する場合は対称 API も
-/// 追加すること。
+/// skin_lower の素 (巻き戻し先) は Entry に保持せず <see cref="Internal.NativeSmrRegistry"/> の
+/// native を単一権威とする (<see cref="RefreshOne"/> の rewind 参照)。skin_lower は誰も swap しない
+/// ため「素 == native」で固定でき、registry 一本化で巻き戻し先が常に stable asset になる。
+/// 本 Coordinator は skin_lower.sharedMesh の唯一の writer であり、push (<see cref="ApplyContribution"/>)
+/// より前に必ず <see cref="RefreshOne"/> 冒頭で GetOrCapture するため、registry には初回ロード時の
+/// 真 native (= _resolved 等の MOD clone でない) のみが焼かれる (汚染は構造的に到達不能)。
+/// 旧実装は OriginalSkinLower を現 sharedMesh から生捕捉していたため、scene 遷移後に transient
+/// pushed Mesh (_resolved clone) を誤捕捉 → InvalidateCache で破棄 → 巻き戻しスキップで
+/// skin_lower が永久消失するバグがあった (registry 一本化で構造的に解消)。
+/// 将来 skin_lower を swap する経路を追加する場合は、この native==素 前提が崩れるため
+/// skin_upper 同様の Entry 保持 + Rebase 機構が必要になる。
 /// </summary>
 internal static class SkinShrinkCoordinator
 {
@@ -67,8 +76,11 @@ internal static class SkinShrinkCoordinator
         // s_entries の key (instanceId) からは GameObject を逆引きできないため Entry 側で保持する。
         // Unity-null 比較で破棄済 GameObject を検出して RefreshAllByConfig 内で skip。
         public GameObject Character;
+        // skin_upper の素は swap 状態で native / Babydoll の 2 値を取るため Entry で保持する
+        // (RebaseOriginalSkinUpper で stable asset に同期)。
+        // skin_lower は誰も swap しないため「素 == native」で固定。巻き戻し先は NativeSmrRegistry
+        // (RefreshOne 冒頭で GetOrCapture 済) を単一権威とし Entry には持たない (class doc 参照)。
         public Mesh OriginalSkinUpper;
-        public Mesh OriginalSkinLower;
         public Contribution Tops;
         public Contribution Bottoms;
         public bool HasTops;
@@ -119,15 +131,11 @@ internal static class SkinShrinkCoordinator
         // Originals: Tops Apply (d) で skin_upper を Babydoll に swap した直後に呼ばれる前提。
         // 既存 entry が Bottoms 単独経路で target 元 mesh を OriginalSkinUpper に格納していた可能性が
         // あるため、Tops Register は **強制的に** 現 sharedMesh (= Babydoll) で上書きする。
-        // skin_lower は誰も swap しないので未捕捉なら現 sharedMesh を捕捉、既存値があれば据置。
+        // skin_lower は誰も swap しないため Entry に素を保持しない (RefreshOne が registry native へ rewind)。
         var renderers = character.GetComponentsInChildren<SkinnedMeshRenderer>(true);
         var su = renderers.FirstOrDefault(r => r != null && r.name == "mesh_skin_upper");
-        if (su != null && su.sharedMesh != null) e.OriginalSkinUpper = su.sharedMesh;
-        if (e.OriginalSkinLower == null)
-        {
-            var sl = renderers.FirstOrDefault(r => r != null && r.name == "mesh_skin_lower");
-            if (sl != null && sl.sharedMesh != null) e.OriginalSkinLower = sl.sharedMesh;
-        }
+        // MOD clone (_resolved/_breastflat) を素として捕捉しない (push 巻き戻し基準のドリフト防止)。
+        if (su != null && su.sharedMesh != null) e.OriginalSkinUpper = StableSkinUpperBase(su);
 
         s_entries[id] = e;
         RefreshOne(id, character, renderers);
@@ -151,17 +159,14 @@ internal static class SkinShrinkCoordinator
             SampleR = sampleR,
         };
 
-        // Bottoms は skin SMR を swap しない。entry に originals が既にあれば据置 (Tops 由来の Babydoll を尊重)。
+        // Bottoms は skin SMR を swap しない。skin_upper の素が未捕捉なら現 sharedMesh を捕捉
+        // (Tops 由来の Babydoll を尊重し既存値は据置)。skin_lower は Entry に保持せず registry native を使う。
         var renderers = character.GetComponentsInChildren<SkinnedMeshRenderer>(true);
         if (e.OriginalSkinUpper == null)
         {
             var su = renderers.FirstOrDefault(r => r != null && r.name == "mesh_skin_upper");
-            if (su != null && su.sharedMesh != null) e.OriginalSkinUpper = su.sharedMesh;
-        }
-        if (e.OriginalSkinLower == null)
-        {
-            var sl = renderers.FirstOrDefault(r => r != null && r.name == "mesh_skin_lower");
-            if (sl != null && sl.sharedMesh != null) e.OriginalSkinLower = sl.sharedMesh;
+            // MOD clone を素として捕捉しない (push 巻き戻し基準のドリフト防止)。
+            if (su != null && su.sharedMesh != null) e.OriginalSkinUpper = StableSkinUpperBase(su);
         }
 
         s_entries[id] = e;
@@ -177,18 +182,20 @@ internal static class SkinShrinkCoordinator
         e.Tops = default;
 
         // Bottoms 残存: TopsLoader.RestoreFor が直前に skin_upper.sharedMesh を target 元 costume asset に
-        // 戻した前提。OriginalSkinUpper を null 化してから現 sharedMesh で再捕捉することで、
-        // 「Tops 有時の素 = Babydoll」「Tops 無時の素 = target 元 asset」の遷移を吸収する。
-        // 安全弁: live tune cycle で snap.OriginalMesh が destroyed transient を指していた場合、
-        // RestoreFor で sharedMesh が Unity-null になっている。`su.sharedMesh != null` チェックは
-        // Unity-null も False で弾くため、destroyed Mesh を OriginalSkinUpper に再捕獲してしまう
-        // 事故は起きない (e.OriginalSkinUpper は null のまま温存される)。RefreshOne 内 L220 の
-        // null check で rewind も skip され、後続の Apply (d) が RestoreSkinUpperToOriginal +
-        // SwapSmr で正常に復旧する。
+        // 戻した前提 (NativeSmrRegistry.TryGet 経由)。OriginalSkinUpper を null 化してから現 sharedMesh で
+        // 再捕捉することで、「Tops 有時の素 = Babydoll」「Tops 無時の素 = target 元 asset」の遷移を吸収する。
+        // 規約遵守前提: ApplySkinUpperPhase で GetOrCapture 済のため TryGet は真 native を返す。
+        // Fail-safe: 規約破綻 (skin_upper の GetOrCapture 抜け) で TryGet が null を返した場合、RestoreFor で
+        // smr.sharedMesh が Unity-null になる。`su.sharedMesh != null` チェックは Unity-null も False で弾くため、
+        // destroyed Mesh を OriginalSkinUpper に再捕獲する事故は起きない (e.OriginalSkinUpper は null のまま
+        // 温存)。RefreshOne 内の null check で rewind も skip。ただし mesh_skin_upper 描画は消失するため
+        // 規約破綻は LogError (GetOrCapture suffix check) で fail-fast 検出する設計に依存する。
         var renderers = character.GetComponentsInChildren<SkinnedMeshRenderer>(true);
         e.OriginalSkinUpper = null;
         var su = renderers.FirstOrDefault(r => r != null && r.name == "mesh_skin_upper");
-        if (su != null && su.sharedMesh != null) e.OriginalSkinUpper = su.sharedMesh;
+        // MOD clone (_resolved/_breastflat) を素として再捕捉しない (additive で skin_upper snapshot 不在のとき
+        // 現 sharedMesh が push 済 _resolved のまま残り、ここで再捕捉すると _resolved が累積する主ドリフト点)。
+        if (su != null && su.sharedMesh != null) e.OriginalSkinUpper = StableSkinUpperBase(su);
         s_entries[id] = e;
         // entry は s_entries に残す (Has* 両方 false でも OriginalSkin* は保持して、live tune
         // cycle 中の InvalidateCache → 再 Register で transient pushed Mesh を「素」と誤捕獲する事故を
@@ -222,9 +229,27 @@ internal static class SkinShrinkCoordinator
         var skinUpper = renderers.FirstOrDefault(r => r != null && r.name == "mesh_skin_upper");
         var skinLower = renderers.FirstOrDefault(r => r != null && r.name == "mesh_skin_lower");
 
+        // memory feedback_native_smr_registry_invariant: rewind / ApplyContribution で skin SMR の sharedMesh を
+        // MOD 生成 push clone に書き換える前に Registry に真 native を確定。Tops/BottomsLoader 側の
+        // ApplySkinUpperPhase / ApplySkinUpperBabydollPhase が gate (ShouldSwapSkinForFlatten 等) で skip された
+        // 経路でも、本 Coordinator が独立に skin の native 確定責務を負う (Registry 未登録なら現 sharedMesh =
+        // target 元 asset = 真 native を登録、既登録なら idempotent return)。
+        if (skinUpper != null) Internal.NativeSmrRegistry.GetOrCapture(character, skinUpper);
+        if (skinLower != null) Internal.NativeSmrRegistry.GetOrCapture(character, skinLower);
+
         // 1. Rewind to originals (素 asset 参照のみ。Destroy 不要、addressables 共有で永続)。
+        //    skin_upper: Entry 保持の素 (native or Babydoll。RebaseOriginalSkinUpper で stable 同期)。
+        //    skin_lower: NativeSmrRegistry の真 native を単一権威とする。直上 :236 の GetOrCapture で
+        //      registry は必ず初回ロード時の native を保持済み (本 Coordinator が skin_lower の唯一の
+        //      writer で push より前に GetOrCapture するため汚染不能。class doc 参照)。これにより
+        //      scene 遷移後も TryGet が真 native を返し、旧 OriginalSkinLower 生捕捉で起きた
+        //      「_resolved クローン誤捕捉 → InvalidateCache 破棄 → 巻き戻しスキップ → 永久消失」を防ぐ。
         if (skinUpper != null && e.OriginalSkinUpper != null) skinUpper.sharedMesh = e.OriginalSkinUpper;
-        if (skinLower != null && e.OriginalSkinLower != null) skinLower.sharedMesh = e.OriginalSkinLower;
+        if (skinLower != null)
+        {
+            var nativeLower = Internal.NativeSmrRegistry.TryGet(skinLower);
+            if (nativeLower != null) skinLower.sharedMesh = nativeLower;
+        }
 
         // 2. Anchor 一括収集 (rewind 直後に固定化、push 中に anchor が変わらないように)。
         // face/eye 系を優先、不在なら skin系互いを除外する旧仕様に fallback (Bunnygirl 暴走防止)。
@@ -311,6 +336,19 @@ internal static class SkinShrinkCoordinator
     }
 
     /// <summary>
+    /// skin push の falloff anchor 頂点を収集する共有ヘルパ。face/eye 系を優先し、不在なら
+    /// <paramref name="fallbackExcludeSelf"/> を除く skin 系で fallback する（waist 境界連続化 / 暴走防止）。
+    /// pure-native BreastFlatten の肌 push（<see cref="BreastFlattenApplier"/>）と本 Coordinator で共有。
+    /// </summary>
+    internal static Vector3[] CollectSkinPushAnchor(
+        SkinnedMeshRenderer[] renderers, HashSet<string> fallbackExcludeSelf)
+    {
+        var anchor = CollectFaceBoundaryAnchorVerts(renderers);
+        if (anchor.Length > 0) return anchor;
+        return CollectSkinShrinkAnchorVerts(renderers, fallbackExcludeSelf);
+    }
+
+    /// <summary>
     /// 1 つの contribution を 1 つの skin SMR に対して累積適用する。
     /// 各 cloth SMR ごとに <see cref="MeshPenetrationResolver.Resolve"/> を呼び、結果を skin SMR.sharedMesh に挿す。
     /// 同 cloth mesh の重複は呼出内 HashSet で 1 回に絞る。
@@ -362,26 +400,41 @@ internal static class SkinShrinkCoordinator
     }
 
     /// <summary>
-    /// skin_upper SMR を Coordinator 保持の stable な原 mesh (<c>e.OriginalSkinUpper</c>) に書き戻す。
-    /// <see cref="TopsLoader"/> の Apply (d) で <c>CaptureSnapshotIfFirst</c> 直前に呼ぶ。
+    /// 保持中の <c>OriginalSkinUpper</c> を新しい stable asset で同期する。
+    /// skin_upper を Babydoll に swap する主体 (Tops / BreastFlatten-Bottoms) が swap 後に Babydoll、
+    /// 解除後に native を渡して、<see cref="RefreshOne"/> の rewind 先を実状態と一致させる用途。
     ///
-    /// Why: ApplyDirectly 経路で RestoreFor→UnregisterTops→RefreshOne が HasBottoms 残存時に transient pushed Mesh で
-    /// sharedMesh を上書きし、それを Snapshot が OriginalMesh として焼き込むと、次の Invalidate→Destroy で
-    /// destroyed Mesh が sharedMesh に書き戻され描画破損する。snapshot が常に addressables asset を指すよう rewind。
-    ///
-    /// no-op: null/未登録/OriginalSkinUpper 未捕捉/既に一致。
+    /// <b>必ず addressables stable asset を渡すこと</b>。push 済 / flatten clone 等の transient を渡すと
+    /// 後続 <see cref="InvalidateCache"/>→Destroy で RefreshOne が destroyed Mesh に rewind し描画破損する
+    /// (本クラスが据置/再捕捉ロジックで一貫して回避している不変条件)。
+    /// entry 不在 / mesh null は no-op。
     /// </summary>
-    internal static void RestoreSkinUpperToOriginal(GameObject character, SkinnedMeshRenderer skinUpperSmr)
+    internal static void RebaseOriginalSkinUpper(GameObject character, Mesh stableMesh)
     {
-        if (character == null || skinUpperSmr == null) return;
+        if (character == null || stableMesh == null) return;
         int id = character.GetInstanceID();
         if (!s_entries.TryGetValue(id, out var e)) return;
-        if (e.OriginalSkinUpper == null) return;
-        // `==` は UnityEngine.Object overload。skinUpperSmr.sharedMesh が destroyed (Unity-null) の
-        // 場合 e.OriginalSkinUpper (alive non-null) との比較は False を返すため、destroyed Mesh は
-        // 確実に下行で alive asset に書き戻される。
-        if (skinUpperSmr.sharedMesh == e.OriginalSkinUpper) return;
-        skinUpperSmr.sharedMesh = e.OriginalSkinUpper;
+        e.OriginalSkinUpper = stableMesh;
+        s_entries[id] = e;
+    }
+
+    /// <summary>
+    /// skin_upper の push 巻き戻し基準 (素) として安全に捕捉できる Mesh を返す。
+    /// 現 sharedMesh が MOD 生成 clone (_resolved/_breastflat 等) の場合、それを <c>OriginalSkinUpper</c> に
+    /// 捕捉すると巻き戻し基準がドリフトし、サイクルごとに _resolved が累積する (additive base-SwimWear +
+    /// Tops/Bottoms override で skin_upper がトゲ破綻)。clone なら registry の真 native を使う
+    /// (skin_lower の registry 単一権威化と同型。<see cref="RebaseOriginalSkinUpper"/> doc の
+    /// 「OriginalSkinUpper は stable asset のみ」不変条件を内部捕捉点で強制する)。
+    /// stable asset (真 native / Babydoll, suffix 無) はそのまま返す。TryGet が null (未登録/fake-null) なら
+    /// null を返し捕捉を見送る (RefreshOne の null-check で rewind skip = 既存 fail-safe と整合)。
+    /// </summary>
+    private static Mesh StableSkinUpperBase(SkinnedMeshRenderer su)
+    {
+        var shared = su != null ? su.sharedMesh : null;
+        if (shared == null) return null;
+        if (Internal.NativeSmrRegistry.IsModGeneratedMesh(shared))
+            return Internal.NativeSmrRegistry.TryGet(su);
+        return shared;
     }
 
     public static void ClearScene()
@@ -397,14 +450,21 @@ internal static class SkinShrinkCoordinator
     /// 再 register するだけだと、もう一方しか override されていない target が destroyed Mesh を
     /// 参照したまま孤児化してしまう。本メソッドが s_entries 全件を refresh して整合を取る。
     /// 破棄済み GameObject (Unity-null) は entry を削除する。
+    ///
+    /// <paramref name="skipIds"/> に含まれる instanceId の entry は skip する。
+    /// 呼出側 (live-tune) が既に canonical な再 Apply (skin push + BreastFlatten overlay) を
+    /// 終えた char を指定する用途。skip しないと <see cref="RefreshOne"/> が skin を素から push し直し、
+    /// 直前に被せた BreastFlatten clone を上書きして flatten が消える (skin push のみ残る)。
+    /// 到達済み char は呼出側で fresh な sharedMesh に再構築済みのため skip しても孤児化しない。
     /// </summary>
-    public static void RefreshAllByConfig()
+    public static void RefreshAllByConfig(HashSet<int> skipIds = null)
     {
         if (s_entries.Count == 0) return;
         var deadIds = new List<int>();
         // 列挙中の操作で例外を避けるため key を ToList でスナップショット。
         foreach (var id in s_entries.Keys.ToList())
         {
+            if (skipIds != null && skipIds.Contains(id)) continue;
             if (!s_entries.TryGetValue(id, out var e)) continue;
             if (e.Character == null)
             {

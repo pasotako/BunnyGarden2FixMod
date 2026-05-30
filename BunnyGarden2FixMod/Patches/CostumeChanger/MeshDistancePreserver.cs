@@ -1,6 +1,7 @@
 using BunnyGarden2FixMod.Utils;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace BunnyGarden2FixMod.Patches.CostumeChanger;
@@ -67,9 +68,22 @@ internal static class MeshDistancePreserver
     /// 各 cloth vert で <c>t = saturate(d_donor_eff / weightFalloffOuter)</c> として skin 由来 boneWeight と
     /// donor 元 boneWeight を線形 blend（t=0: 100% skin, t=1: 100% donor）。0 以下で Pass 4 完全 skip。
     /// donor cloth が target body に移植された後、関節曲げで cloth が肌から剥離・突き抜けるのを防ぐ。</param>
+    /// <param name="smoothIterations">距離保存の補正成分 disp を衣装トポロジで Jacobi-Laplacian 平滑化する反復回数。
+    /// 0 以下で平滑化スキップ（距離保存の生の結果）。逆距離² サンプリングの高周波ノイズ（ガタつき）を除去する。</param>
+    /// <param name="smoothStrength">平滑化の 1 反復あたり近傍平均への寄せ率 [0,1]。0 で無効、1 で最大。</param>
+    /// <param name="breastPushOut">胸領域 (R/L_breast1_skinJT weight) の cloth 頂点を、距離保存で決まる肌との距離から
+    /// さらに target skin 法線方向へ押し出す standoff (メートル)。0 以下で完全 skip（既存挙動）。
+    /// additive Tops 重ね着（SwimWear 等 full-body target + 上着 override + 胸 flat）で肌 push が走らないため
+    /// 上着が胸で突き抜けるのを cloth 側で補正する用途。<paramref name="breastPushOut"/> > 0 かつ donor cloth に
+    /// 有効な boneWeight/bones があるときのみ胸 bone を解決して適用する。</param>
+    /// <param name="cleavageShrink">BreastFlatten 時、左右の胸の谷間 cloth の保存 offset を minOffset 床へ向けて
+    /// 縮める強度 [0,1]。0 で完全 distance preservation（既存挙動）。谷間係数 c との積 (cleavageShrink*c) で
+    /// 各頂点の縮小量が決まる。谷間 skin は flatten で動かず push≒0 となり衣装が浮く問題の対症。</param>
+    /// <param name="cleavageWidth">谷間判定の左右帯幅。胸骨間隔の半分 (halfSep) に対する比率。
+    /// <paramref name="cleavageShrink"/> &lt;= 0 または本値 &lt;= 0 のとき谷間縮小は no-op。</param>
     /// <param name="logTag">ログ出力タグ。</param>
     /// <returns>補正済み新 Mesh。全頂点 push が実質ゼロなら null（差し替え不要）。</returns>
-    internal static Mesh Preserve(SkinnedMeshRenderer donorCostumeSmr, SkinnedMeshRenderer[] donorSkinSmrs, SkinnedMeshRenderer[] targetSkinSmrs, float maxNeighborDist, float minOffset, float skinSampleRadius, float weightFalloffOuter, string logTag)
+    internal static Mesh Preserve(SkinnedMeshRenderer donorCostumeSmr, SkinnedMeshRenderer[] donorSkinSmrs, SkinnedMeshRenderer[] targetSkinSmrs, float maxNeighborDist, float minOffset, float skinSampleRadius, float weightFalloffOuter, int smoothIterations, float smoothStrength, float breastPushOut, float cleavageShrink, float cleavageWidth, string logTag)
     {
         var donorMesh = donorCostumeSmr != null ? donorCostumeSmr.sharedMesh : null;
         if (donorMesh == null)
@@ -98,6 +112,41 @@ internal static class MeshDistancePreserver
                              && donorBones != null && donorBones.Length > 0;
         if (!boneScalingOk)
             PatchLogger.LogDebug($"[{logTag}] distance preserve: BoneWeight scaling 無効 (boneWeights={donorBoneWeights?.Length ?? -1}/{donorVerts.Length}, bones={donorBones?.Length ?? -1}) — push 量は per-vert 1.0 倍");
+
+        // breast push-out (additive Tops 重ね着の突き抜け対策) 用 bone idx。breastPushOut>0 かつ boneScalingOk
+        // (= donorBoneWeights/donorBones が有効) のときのみ解決。それ以外は -1 のままで Pass 3 加算が自然に skip され
+        // donorBoneWeights[i] へのアクセスも発生しない (無効配列でも安全)。
+        int rBreastIdx = -1, lBreastIdx = -1;
+        if ((breastPushOut > 0f || cleavageShrink > 0f) && boneScalingOk)
+            (rBreastIdx, lBreastIdx) = ResolveBreastBoneIndices(donorBones);
+
+        // 谷間 delta 縮小用の幾何。bindposes[idx] は mesh-local→bone-local の inverse bind なので、
+        // その inverse で bone 原点を mesh-local 空間に戻す（donorVerts と同空間）。cleavageShrink>0 かつ
+        // cleavageWidth>0 かつ両胸骨が解決でき、間隔が有意のときのみ active。それ以外は cleavageActive=false で
+        // Pass3 が従来分岐（cleavageWidth>0 も条件に含め width=0 を明示 no-op 化）。
+        bool cleavageActive = false;
+        Vector3 cleavageMid = Vector3.zero, cleavageAxis = Vector3.zero;
+        float cleavageHalfSep = 0f;
+        if (cleavageShrink > 0f && cleavageWidth > 0f && rBreastIdx >= 0 && lBreastIdx >= 0)
+        {
+            var binds = donorMesh.bindposes;
+            if (binds != null && rBreastIdx < binds.Length && lBreastIdx < binds.Length)
+            {
+                Vector3 rPos = binds[rBreastIdx].inverse.MultiplyPoint3x4(Vector3.zero);
+                Vector3 lPos = binds[lBreastIdx].inverse.MultiplyPoint3x4(Vector3.zero);
+                Vector3 sep = lPos - rPos;
+                cleavageHalfSep = sep.magnitude * 0.5f;
+                if (cleavageHalfSep > 1e-5f)
+                {
+                    cleavageMid = (rPos + lPos) * 0.5f;
+                    cleavageAxis = sep / (cleavageHalfSep * 2f);   // = sep.normalized
+                    cleavageActive = true;
+                }
+            }
+        }
+        // 谷間 weight gate 閾値（構造パラメータのため固定 const。視覚調整は cleavageShrink/Width で行う）。
+        const float CleavageGateLo = 0.05f;   // この breast weight 未満は谷間扱いしない（gate 専用の独立閾値）
+        const float CleavageGateHi = 0.20f;   // この breast weight 以上で gate 全開
 
         if (!CombineSkinSmrs(donorSkinSmrs,
             out var dSkinVerts, out var dSkinNormals,
@@ -220,6 +269,16 @@ internal static class MeshDistancePreserver
             }
         }
 
+        // Pass 3 並列化のため bone 名をメインスレッドで前抽出 (Transform.name はワーカー不可)。
+        // IsSkinBone は boneScalingOk のときのみ到達するため同条件で構築。
+        string[] donorBoneNames = null;
+        if (boneScalingOk)
+        {
+            donorBoneNames = new string[donorBones.Length];
+            for (int b = 0; b < donorBones.Length; b++)
+                donorBoneNames[b] = donorBones[b]?.name;
+        }
+
         // カバー外判定閾値: 呼び出し側 (Configs) から指定。最小フロアで負値弾く。
         if (maxNeighborDist <= 0f)
         {
@@ -240,14 +299,13 @@ internal static class MeshDistancePreserver
         // 動的計算のフロア (1mm * 10 = 10mm)。distanceQ がほぼ 0 のときに 0 ガードで誤検出しないよう。
         const float invertGuardFloor = -0.001f * invertGuardMul;
 
+        // serial Pass1 専用の再利用 scratch (parallel パスは thread-local List を localInit で確保)。
         var neighbors = new List<int>(16);
         var disp = new Vector3[donorVerts.Length];
 
-        int pushed = 0, outOfRange = 0, donorFallback = 0, targetFallback = 0, skippedInverted = 0;
-        int boneScaleZeroed = 0;     // skinShare ≈ 0 で push を実質ゼロ化した頂点数
-        float maxPush = 0f;
-        // skinShare 帯別頂点数: <0.1 / <0.5 / <0.9 / >=0.9
-        var shareBand = new int[4];
+        // pushed/targetFallback/skippedInverted/boneScaleZeroed/maxPush/shareBand は Pass3Local へ移管。
+        // outOfRange/donorFallback は最終合算先として残す。
+        int outOfRange = 0, donorFallback = 0;
 
         // Pass 1: cloth → donor skin 初回サンプリング
         //   d_donor[i] と「Pass 3 で skip すべき頂点」(out-of-range / inverted) を pre-compute する。
@@ -260,19 +318,40 @@ internal static class MeshDistancePreserver
         int pass1DonorFallback = 0;
 
         long pass1Start = sw.ElapsedMilliseconds;
-        for (int i = 0; i < donorVerts.Length; i++)
+        // per-vertex 本体 (serial / parallel 共用)。scratch を引数で受けて closure 共有を避ける。
+        // 戻り値: SAMPLE_K_FALLBACK のとき 1 (fallback カウント用)、それ以外 0。
+        int Pass1Vertex(int i, List<int> scratch)
         {
             var v = donorVerts[i];
             int outcome = SampleSkinSurface(donorSkinGrid, dSkinVerts, dSkinNormals, v,
-                skinSampleRadius, maxNeighborDistSq, neighborK, weightEps, neighbors,
+                skinSampleRadius, maxNeighborDistSq, neighborK, weightEps, scratch,
                 out var sAvg, out var snAvg);
-            if (outcome == SAMPLE_OUT_OF_RANGE) { pass1Status[i] = STATUS_OUT_RANGE; continue; }
-            if (outcome == SAMPLE_K_FALLBACK) pass1DonorFallback++;
+            if (outcome == SAMPLE_OUT_OF_RANGE) { pass1Status[i] = STATUS_OUT_RANGE; return 0; }
+            int fb = outcome == SAMPLE_K_FALLBACK ? 1 : 0;
 
             float d = Vector3.Dot(v - sAvg, snAvg);
             float donorGuard = Mathf.Min(invertGuardFloor, -Mathf.Abs(d) * invertGuardMul);
-            if (d < donorGuard) { pass1Status[i] = STATUS_INVERTED; continue; }
+            if (d < donorGuard) { pass1Status[i] = STATUS_INVERTED; return fb; }
             d_donor[i] = d;
+            return fb;
+        }
+
+        if (donorVerts.Length >= PARALLEL_VERTEX_THRESHOLD)
+        {
+            object pass1Lock = new object();
+            Parallel.For(0, donorVerts.Length,
+                () => (scratch: new List<int>(16), fallback: 0),
+                (i, _, local) =>
+                {
+                    local.fallback += Pass1Vertex(i, local.scratch);
+                    return local;
+                },
+                local => { lock (pass1Lock) pass1DonorFallback += local.fallback; });
+        }
+        else
+        {
+            for (int i = 0; i < donorVerts.Length; i++)
+                pass1DonorFallback += Pass1Vertex(i, neighbors);
         }
         long pass1Ms = sw.ElapsedMilliseconds - pass1Start;
 
@@ -352,24 +431,15 @@ internal static class MeshDistancePreserver
         // Pass 3: 補正 donor skin で d_donor 再算出 + target skin と比較して push 算出
         //   cloth vert 自体は触らず、push は target 法線方向のみ。
         long passStart = sw.ElapsedMilliseconds;
-        // outOfRange / donorFallback 内訳。Pass 別 / skin 別に集計するため一旦分けて最後に合算。
-        int outOfRangeP1Donor = 0, outOfRangeP3Donor = 0, outOfRangeTarget = 0;
-        int donorFallbackP3 = 0;
-        // Pass 4 統計
-        int weightTransferred = 0;
-        float maxWeightLoss = 0f;
-        int auxSkippedTotal = 0;        // skin 由来集計から副骨理由で skip した slot 累計
-        int ribbonSkipped = 0;          // ribbon 支配で Pass 4 全 skip した vert 数
-        int headSkipped = 0;            // Head 主骨支配で Pass 3 push + Pass 4 weight 転送 両方 skip した vert 数
-        // per-vert アロケーション排除のため reuse buffer (typical 4–8 keys)。
-        var blendScratch = weightTransferEnabled ? new Dictionary<int, float>(8) : null;
-        var blendScratchKeys = weightTransferEnabled ? new List<int>(8) : null;
-        var blendScratchSorted = weightTransferEnabled ? new List<KeyValuePair<int, float>>(8) : null;
+        // Pass 3/4 統計は Pass3Local に集約し、serial/parallel 共通の per-vertex 本体で書く。
+        var pass3Stats = new Pass3Local(weightTransferEnabled);
 
-        for (int i = 0; i < donorVerts.Length; i++)
+        // per-vertex 本体 (serial / parallel 共用)。L に scratch + per-thread 統計を持たせ、
+        // 出力 disp[i]/newBoneWeights[i] は per-index 書込み (スレッド安全)。continue は return。
+        void Pass3Vertex(int i, Pass3Local L)
         {
-            if (pass1Status[i] == STATUS_OUT_RANGE) { outOfRangeP1Donor++; continue; }
-            if (pass1Status[i] == STATUS_INVERTED) { skippedInverted++; continue; }
+            if (pass1Status[i] == STATUS_OUT_RANGE) { L.OutOfRangeP1Donor++; return; }
+            if (pass1Status[i] == STATUS_INVERTED) { L.SkippedInverted++; return; }
 
             // Head 主骨支配 vert は Pass 3 push と Pass 4 weight 転送を両方 skip。
             // ヘッドドレス系 vert は head と剛体追従すべきで、body skin との距離保存対象に
@@ -378,8 +448,8 @@ internal static class MeshDistancePreserver
             // にも到達せず、newBoneWeights[i] は Clone で donor 原状を保持する。
             if (boneScalingOk && IsHeadDominantVert(donorBoneWeights[i], donorBoneIsHead))
             {
-                headSkipped++;
-                continue;
+                L.HeadSkipped++;
+                return;
             }
 
             var v = donorVerts[i];
@@ -393,31 +463,31 @@ internal static class MeshDistancePreserver
             Vector3 snAvgTarget;
             {
                 int outcome = SampleSkinSurface(targetSkinGrid, tSkinVerts, tSkinNormals, v,
-                    skinSampleRadius, maxNeighborDistSq, neighborK, weightEps, neighbors,
+                    skinSampleRadius, maxNeighborDistSq, neighborK, weightEps, L.Neighbors,
                     out var sAvg, out var snAvg);
-                if (outcome == SAMPLE_OUT_OF_RANGE) { outOfRangeTarget++; continue; }
-                if (outcome == SAMPLE_K_FALLBACK) targetFallback++;
+                if (outcome == SAMPLE_OUT_OF_RANGE) { L.OutOfRangeTarget++; return; }
+                if (outcome == SAMPLE_K_FALLBACK) L.TargetFallback++;
 
                 snAvgTarget = snAvg;
                 d_target = Vector3.Dot(v - sAvg, snAvg);
                 // d_target の絶対値ベースの動的ガード
                 float targetGuard = Mathf.Min(invertGuardFloor, -Mathf.Abs(d_target) * invertGuardMul);
-                if (d_target < targetGuard) { skippedInverted++; continue; }
+                if (d_target < targetGuard) { L.SkippedInverted++; return; }
             }
 
             // ---- donor skin (補正版) での signed distance ----
             float d_donor_eff;
             {
                 int outcome = SampleSkinSurface(modDonorSkinGrid, modSkinVerts, dSkinNormals, v,
-                    skinSampleRadius, maxNeighborDistSq, neighborK, weightEps, neighbors,
+                    skinSampleRadius, maxNeighborDistSq, neighborK, weightEps, L.Neighbors,
                     out var sAvg, out var snAvg);
-                if (outcome == SAMPLE_OUT_OF_RANGE) { outOfRangeP3Donor++; continue; }
-                if (outcome == SAMPLE_K_FALLBACK) donorFallbackP3++;
+                if (outcome == SAMPLE_OUT_OF_RANGE) { L.OutOfRangeP3Donor++; return; }
+                if (outcome == SAMPLE_K_FALLBACK) L.DonorFallbackP3++;
                 d_donor_eff = Vector3.Dot(v - sAvg, snAvg);
                 // d_donor_eff の絶対値ベースの動的ガード (Pass 1 と対称)。
                 // Pass 2 で skin を凹ませた結果、局所的に snAvg が想定外に振れた場合の defensive guard。
                 float donorGuardP3 = Mathf.Min(invertGuardFloor, -Mathf.Abs(d_donor_eff) * invertGuardMul);
-                if (d_donor_eff < donorGuardP3) { skippedInverted++; continue; }
+                if (d_donor_eff < donorGuardP3) { L.SkippedInverted++; return; }
             }
 
             // ---- Pass 4: skin 由来 boneWeight 転送 (distance falloff blend) ----
@@ -438,75 +508,159 @@ internal static class MeshDistancePreserver
 
                 if (ribbonInfluenced)
                 {
-                    ribbonSkipped++;
+                    L.RibbonSkipped++;
                 }
                 else
                 {
                     // 0=skin (密着), 1=donor (離脱)。負値 (= cloth が skin より内側) は 0 にクランプして 100% skin。
                     float t = Mathf.Clamp01(d_donor_eff / weightFalloffOuter);
                     var blended = ComputeBlendedBoneWeight(
-                        v, neighbors, modSkinVerts, dSkinRemappedToCloth, donorBoneIsAux, donorBoneWeights[i],
-                        t, weightEps, blendScratch, blendScratchKeys, blendScratchSorted, out var loss, out var auxSkipped);
+                        v, L.Neighbors, modSkinVerts, dSkinRemappedToCloth, donorBoneIsAux, donorBoneWeights[i],
+                        t, weightEps, L.BlendScratch, L.BlendKeys, L.BlendSorted, out var loss, out var auxSkipped);
                     newBoneWeights[i] = blended;
-                    if (loss > maxWeightLoss) maxWeightLoss = loss;
-                    auxSkippedTotal += auxSkipped;
-                    weightTransferred++;
+                    if (loss > L.MaxWeightLoss) L.MaxWeightLoss = loss;
+                    L.AuxSkippedTotal += auxSkipped;
+                    L.WeightTransferred++;
                 }
             }
 
             // ---- push 量計算 ----
-            // 距離保存のみ: 目標 d = d_donor_eff (Pass 2 で minOffset 以上に持ち上げ済み)。
-            // target 法線方向に push し、skinShare で物理骨専属頂点を保護。
-            float push = d_donor_eff - d_target;
+            // 通常: 目標 d = d_donor_eff (Pass 2 で minOffset 以上に持ち上げ済み) = 元 skin との距離を完全保存。
+            // 谷間 (cleavageActive): 保存 offset を minOffset 床へ向けて c に比例して縮め、衣装を flat body へ
+            //   引き下ろす。c = 幾何中心帯(band) × 胸 weight gate。谷間 skin は flatten で動かず push≒0 となり
+            //   衣装が浮く問題の対症。cleavageActive ⟹ boneScalingOk (gate 経由) なので donorBoneWeights[i] は安全。
+            // target 法線方向に push し、skinShare で物理骨専属頂点を保護（縮小後の push に乗算、従来どおり）。
+            float push;
+            if (cleavageActive)
+            {
+                float lateral = Mathf.Abs(Vector3.Dot(v - cleavageMid, cleavageAxis));   // 中点面からの横距離
+                // GLSL 風 smoothstep: lateral∈[0,edge] を 0→1 に写し band=1-t で中央=1 / edge 以遠=0 にする。
+                // 注: Unity の Mathf.SmoothStep(from,to,t) は from→to を t で補間する別物で edge 境界に使えない。
+                // edge>0 は cleavageActive 条件で保証されるが、2 条件 (halfSep>1e-5, width>0) の積依存は脆いので直接床を入れて 0除算/巨大値を構造的に排除する
+                float edge = Mathf.Max(cleavageHalfSep * cleavageWidth, 1e-6f);
+                float tBand = Mathf.Clamp01(lateral / edge);
+                tBand = tBand * tBand * (3f - 2f * tBand);               // smoothstep
+                float band = 1f - tBand;                                 // 中央(lateral=0)=1, edge 以遠=0
+                var bwC = donorBoneWeights[i];
+                float wBreastC = (rBreastIdx >= 0 ? BreastWeightShiftMath.GetWeightForBone(bwC, rBreastIdx) : 0f)
+                               + (lBreastIdx >= 0 ? BreastWeightShiftMath.GetWeightForBone(bwC, lBreastIdx) : 0f);
+                float gate = Mathf.Clamp01((wBreastC - CleavageGateLo) / (CleavageGateHi - CleavageGateLo));
+                float c = band * gate;                                     // 谷間係数 [0,1]
+                float k = 1f - cleavageShrink * c;                         // c=0→完全保存, c=1→最大縮小
+                // 縮小は「沈める」一方向。Pass2 の clipping resolve は KNN 近似で d_donor_eff>=minOffset を厳密
+                // 保証せず、minOffset=0 経路では Pass2 自体 skip するため、稀に d_donor_eff<minOffset の頂点で
+                // Lerp が外向き(>d_donor_eff)に振れる。d_donor_eff で上限クランプし押し出しを防ぐ
+                // (通常 d_donor_eff>=minOffset では Lerp<=d_donor_eff なので Min は no-op、c=0 でも no-op)。
+                float targetDist = Mathf.Min(d_donor_eff, Mathf.Lerp(minOffset, d_donor_eff, k));
+                push = targetDist - d_target;
+            }
+            else
+            {
+                push = d_donor_eff - d_target;
+            }
 
             float skinShare = 1f;
             if (boneScalingOk)
             {
                 var bw = donorBoneWeights[i];
                 skinShare = 0f;
-                if (bw.weight0 > 0f && IsSkinBone(donorBones, bw.boneIndex0, skinBoneNames)) skinShare += bw.weight0;
-                if (bw.weight1 > 0f && IsSkinBone(donorBones, bw.boneIndex1, skinBoneNames)) skinShare += bw.weight1;
-                if (bw.weight2 > 0f && IsSkinBone(donorBones, bw.boneIndex2, skinBoneNames)) skinShare += bw.weight2;
-                if (bw.weight3 > 0f && IsSkinBone(donorBones, bw.boneIndex3, skinBoneNames)) skinShare += bw.weight3;
+                if (bw.weight0 > 0f && IsSkinBoneByName(donorBoneNames, bw.boneIndex0, skinBoneNames)) skinShare += bw.weight0;
+                if (bw.weight1 > 0f && IsSkinBoneByName(donorBoneNames, bw.boneIndex1, skinBoneNames)) skinShare += bw.weight1;
+                if (bw.weight2 > 0f && IsSkinBoneByName(donorBoneNames, bw.boneIndex2, skinBoneNames)) skinShare += bw.weight2;
+                if (bw.weight3 > 0f && IsSkinBoneByName(donorBoneNames, bw.boneIndex3, skinBoneNames)) skinShare += bw.weight3;
                 if (skinShare > 1f) skinShare = 1f;
 
                 int band = skinShare < 0.1f ? 0 : (skinShare < 0.5f ? 1 : (skinShare < 0.9f ? 2 : 3));
-                shareBand[band]++;
+                L.ShareBand[band]++;
             }
             push *= skinShare;
+
+            // breast standoff 加算 (additive Tops の突き抜け対策)。距離保存と同じ target 法線方向 (snAvgTarget) に、
+            // 胸 weight でテーパした offset を上乗せする。skinShare とは独立 (固定 geometric standoff)。
+            // 合成は flatten 量算出 (BuildDeformedVertsInPlace) と同じ wR+wL で、潰し領域と押し出し領域を揃える。
+            // rBreastIdx/lBreastIdx は breastPushOut>0 && boneScalingOk のときのみ >=0 (= donorBoneWeights 有効)。
+            // 注: この加算は後段 MeshDisplacementSmoother.SmoothInPlace で近傍平均へ寄せられるため、実効 standoff は
+            //     breastPushOut の設定値より小さく出る (「値を上げても効きが弱い」原因。突き抜けが消える値に調整する)。
+            if (rBreastIdx >= 0 || lBreastIdx >= 0)
+            {
+                float wBreast = (rBreastIdx >= 0 ? BreastWeightShiftMath.GetWeightForBone(donorBoneWeights[i], rBreastIdx) : 0f)
+                              + (lBreastIdx >= 0 ? BreastWeightShiftMath.GetWeightForBone(donorBoneWeights[i], lBreastIdx) : 0f);
+                if (wBreast >= BreastWeightShiftMath.BreastWeightThreshold)
+                    push += breastPushOut * Mathf.Clamp01(wBreast);
+            }
+
             if (Mathf.Abs(push) < 1e-6f)
             {
-                if (boneScalingOk && skinShare < 0.05f) boneScaleZeroed++;
-                continue;
+                if (boneScalingOk && skinShare < 0.05f) L.BoneScaleZeroed++;
+                return;
             }
 
             disp[i] = snAvgTarget * push;
-            if (Mathf.Abs(push) > maxPush) maxPush = Mathf.Abs(push);
-            pushed++;
+            if (Mathf.Abs(push) > L.MaxPush) L.MaxPush = Mathf.Abs(push);
+            L.Pushed++;
+        }
+
+        if (donorVerts.Length >= PARALLEL_VERTEX_THRESHOLD)
+        {
+            object pass3Lock = new object();
+            Parallel.For(0, donorVerts.Length,
+                () => new Pass3Local(weightTransferEnabled),
+                (i, _, L) => { Pass3Vertex(i, L); return L; },
+                L =>
+                {
+                    lock (pass3Lock)
+                    {
+                        pass3Stats.OutOfRangeP1Donor += L.OutOfRangeP1Donor;
+                        pass3Stats.OutOfRangeP3Donor += L.OutOfRangeP3Donor;
+                        pass3Stats.OutOfRangeTarget += L.OutOfRangeTarget;
+                        pass3Stats.DonorFallbackP3 += L.DonorFallbackP3;
+                        pass3Stats.TargetFallback += L.TargetFallback;
+                        pass3Stats.SkippedInverted += L.SkippedInverted;
+                        pass3Stats.HeadSkipped += L.HeadSkipped;
+                        pass3Stats.RibbonSkipped += L.RibbonSkipped;
+                        pass3Stats.WeightTransferred += L.WeightTransferred;
+                        pass3Stats.AuxSkippedTotal += L.AuxSkippedTotal;
+                        pass3Stats.BoneScaleZeroed += L.BoneScaleZeroed;
+                        pass3Stats.Pushed += L.Pushed;
+                        for (int b = 0; b < 4; b++) pass3Stats.ShareBand[b] += L.ShareBand[b];
+                        if (L.MaxWeightLoss > pass3Stats.MaxWeightLoss) pass3Stats.MaxWeightLoss = L.MaxWeightLoss;
+                        if (L.MaxPush > pass3Stats.MaxPush) pass3Stats.MaxPush = L.MaxPush;
+                    }
+                });
+        }
+        else
+        {
+            for (int i = 0; i < donorVerts.Length; i++)
+                Pass3Vertex(i, pass3Stats);
         }
         long passMs = sw.ElapsedMilliseconds - passStart;
         // 合算 (互換性維持のため outOfRange / donorFallback の総数も保持)。
-        outOfRange = outOfRangeP1Donor + outOfRangeP3Donor + outOfRangeTarget;
-        donorFallback = pass1DonorFallback + donorFallbackP3;
+        outOfRange = pass3Stats.OutOfRangeP1Donor + pass3Stats.OutOfRangeP3Donor + pass3Stats.OutOfRangeTarget;
+        donorFallback = pass1DonorFallback + pass3Stats.DonorFallbackP3;
 
         sw.Stop();
         string shareBandStr = boneScalingOk
-            ? $"shareBand[<.1/<.5/<.9/>=.9]={shareBand[0]}/{shareBand[1]}/{shareBand[2]}/{shareBand[3]} boneScaleZeroed={boneScaleZeroed} headSkipped={headSkipped}"
+            ? $"shareBand[<.1/<.5/<.9/>=.9]={pass3Stats.ShareBand[0]}/{pass3Stats.ShareBand[1]}/{pass3Stats.ShareBand[2]}/{pass3Stats.ShareBand[3]} boneScaleZeroed={pass3Stats.BoneScaleZeroed} headSkipped={pass3Stats.HeadSkipped}"
             : "shareBand=N/A";
         string weightTransferStr = weightTransferEnabled
-            ? $"weightTransferred={weightTransferred} maxWeightLoss={maxWeightLoss:F3} auxSlotsSkipped={auxSkippedTotal} ribbonSkipped={ribbonSkipped}"
+            ? $"weightTransferred={pass3Stats.WeightTransferred} maxWeightLoss={pass3Stats.MaxWeightLoss:F3} auxSlotsSkipped={pass3Stats.AuxSkippedTotal} ribbonSkipped={pass3Stats.RibbonSkipped}"
             : "weightTransfer=disabled";
         PatchLogger.LogDebug(
             $"[{logTag}] distance preserve: donor={donorMesh.name}({donorVerts.Length}v) " +
             $"donorSkin=[{dSkinSummary}] targetSkin=[{tSkinSummary}] range={maxNeighborDist:F4}m minOffset={minOffset:F4}m skinSampleR={skinSampleRadius:F4}m weightFalloff={weightFalloffOuter:F4}m " +
             $"clipping={clippingCount} skinDented={skinDented}(maxDent={maxDent:F4}m) " +
-            $"pushed={pushed} outOfRange={outOfRange}(p1Donor={outOfRangeP1Donor}/p3Donor={outOfRangeP3Donor}/target={outOfRangeTarget}) " +
-            $"donorFallback={donorFallback}(p1={pass1DonorFallback}/p3={donorFallbackP3}) targetFallback={targetFallback} skippedInverted={skippedInverted} maxPush={maxPush:F4}m " +
+            $"pushed={pass3Stats.Pushed} outOfRange={outOfRange}(p1Donor={pass3Stats.OutOfRangeP1Donor}/p3Donor={pass3Stats.OutOfRangeP3Donor}/target={pass3Stats.OutOfRangeTarget}) " +
+            $"donorFallback={donorFallback}(p1={pass1DonorFallback}/p3={pass3Stats.DonorFallbackP3}) targetFallback={pass3Stats.TargetFallback} skippedInverted={pass3Stats.SkippedInverted} maxPush={pass3Stats.MaxPush:F4}m " +
             $"{shareBandStr} {weightTransferStr} " +
             $"grid={gridMs}ms p1={pass1Ms}ms p2={pass2Ms}ms p3={passMs}ms total={sw.ElapsedMilliseconds}ms");
 
         // 全頂点 push が実質ゼロかつ Pass 4 boneWeight 転送も無し → mesh 差し替え不要
-        if (pushed == 0 && weightTransferred == 0) return null;
+        if (pass3Stats.Pushed == 0 && pass3Stats.WeightTransferred == 0) return null;
+
+        // 補正成分 disp を衣装トポロジで Jacobi-Laplacian 平滑化してガタつき (逆距離² サンプリングの
+        // 高周波ノイズ、高 push で可視化) を除去する。base 形状は不変、平均=縮小写像なのでトゲは構造的に出ない。
+        // iterations<=0 / strength は SmoothInPlace 側で no-op / Clamp01 ガード。
+        MeshDisplacementSmoother.SmoothInPlace(disp, donorMesh.triangles, donorVerts.Length, smoothIterations, smoothStrength);
 
         // 補正済み mesh を新規生成 (元 mesh は変更しない)
         var newVerts = (Vector3[])donorVerts.Clone();
@@ -658,6 +812,33 @@ internal static class MeshDistancePreserver
         if (kept > 2) { result.boneIndex2 = scratchSorted[2].Key; result.weight2 = scratchSorted[2].Value * invTotal; }
         if (kept > 3) { result.boneIndex3 = scratchSorted[3].Key; result.weight3 = scratchSorted[3].Value * invTotal; }
         return result;
+    }
+
+    // 並列化発火閾値。これ未満の頂点数 (sleeve ~248v 等) は thread 起動 overhead が利得を上回るため serial。
+    // 固定値選好に従い const (Config 化しない)。
+    private const int PARALLEL_VERTEX_THRESHOLD = 1024;
+
+    // Pass 3 並列化用 thread-local 状態。scratch バッファ + per-thread 統計。
+    // localFinally で共有へ sum/max merge する (すべて順序非依存)。
+    private sealed class Pass3Local
+    {
+        public readonly List<int> Neighbors = new List<int>(16);
+        public readonly Dictionary<int, float> BlendScratch;
+        public readonly List<int> BlendKeys;
+        public readonly List<KeyValuePair<int, float>> BlendSorted;
+
+        public int OutOfRangeP1Donor, OutOfRangeP3Donor, OutOfRangeTarget;
+        public int DonorFallbackP3, TargetFallback, SkippedInverted;
+        public int HeadSkipped, RibbonSkipped, WeightTransferred, AuxSkippedTotal, BoneScaleZeroed, Pushed;
+        public readonly int[] ShareBand = new int[4];
+        public float MaxWeightLoss, MaxPush;
+
+        public Pass3Local(bool weightTransfer)
+        {
+            BlendScratch = weightTransfer ? new Dictionary<int, float>(8) : null;
+            BlendKeys = weightTransfer ? new List<int>(8) : null;
+            BlendSorted = weightTransfer ? new List<KeyValuePair<int, float>>(8) : null;
+        }
     }
 
     // Phase 4 sort 用の delegate (毎 vert の lambda アロケーションを避けるため static cache)。
@@ -816,6 +997,34 @@ internal static class MeshDistancePreserver
         var b = bones[idx];
         if (b == null) return false;
         return skinBoneNames.Contains(b.name);
+    }
+
+    // Pass 3 hot loop 用: Transform.name のスレッド外アクセスを避けるため、ループ前に
+    // メインスレッドで抽出した bone 名配列で判定する index ベース版。
+    private static bool IsSkinBoneByName(string[] boneNames, int idx, HashSet<string> skinBoneNames)
+    {
+        if (boneNames == null || idx < 0 || idx >= boneNames.Length) return false;
+        var n = boneNames[idx];
+        return n != null && skinBoneNames.Contains(n);
+    }
+
+    /// <summary>
+    /// donor cloth bones[] から胸 bone <c>R_breast1_skinJT</c> / <c>L_breast1_skinJT</c> の index を解決する
+    /// (breast push-out 用)。bone 名完全一致、6 character 共通。いずれか未検出は -1 を返す
+    /// (BreastClothWeightShifter / BreastFlattenApplier の同名 resolver と同型。public 共有版が無いため局所保持)。
+    /// </summary>
+    private static (int rIdx, int lIdx) ResolveBreastBoneIndices(Transform[] bones)
+    {
+        int rIdx = -1, lIdx = -1;
+        if (bones == null) return (rIdx, lIdx);
+        for (int i = 0; i < bones.Length; i++)
+        {
+            var b = bones[i];
+            if (b == null) continue;
+            if (b.name == "R_breast1_skinJT") rIdx = i;
+            else if (b.name == "L_breast1_skinJT") lIdx = i;
+        }
+        return (rIdx, lIdx);
     }
 
     /// <summary>

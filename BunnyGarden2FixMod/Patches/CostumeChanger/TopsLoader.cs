@@ -31,10 +31,11 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 ///     rootBone へ fallback（KneeSocksLoader / BottomsLoader と同手順）。
 ///   - 注入された新 SMR の rootBone は reference SMR (mesh_skin_upper) の rootBone を流用。
 ///     既存 SMR の swap 時は target の元 rootBone を変更しない。
-///   - target がフルボディ衣装 (Bunnygirl / フルボディ DLC) 状態では Apply スキップ
-///     （フルボディスーツで構造差大）。
-///     SwimWear は除外（donor=SwimWear のとき ApplySwimWearBottomsPhase で full-body swap が成立。
-///     Bottoms 領域も Tops 経由で扱うため SwimWearStockingPatch と競合しない）。
+///   - target がフルボディ衣装 (SwimWear / Bunnygirl / フルボディ DLC) 状態では常に additive(重ね着):
+///     donor の Tops SMR を inject overlay し、target の元衣装 / 素肌 / skin_lower を一切 touch しない
+///     （additiveMode = IsFullBodyCostume(target)）。donor=SwimWear も additive に含む
+///     （ワンピース水着の下半身は mesh_costume に内包され overlay される。
+///     plan 2026-05-30-swimwear-donor-additive）。非フルボディ base への SwimWear donor は従来どおり swap。
 ///   - mesh_costume_skirt* / mesh_costume_pants* は Bottoms 領域として除外（IsTopsCandidate）。
 ///   - 同名 SMR 重複は最初の 1 つだけ採用し警告ログ。2 つ目以降は swap / hide / inject いずれの
 ///     対象にもならず素のまま残る (Phase 0 ログで重複ゼロを確認済みの前提)。
@@ -95,109 +96,13 @@ public class TopsLoader : MonoBehaviour
         s_cache.SetHostRoot(s_loaderHostRoot);
         DonorPreloadRegistry.Register(s_cache.IsHostParent);
         SceneManager.sceneUnloaded += OnSceneUnloaded;
-        // 距離保存パラメータの live tuning。picker UI 状態に依存しないよう Loader 側で配線する。
-        if (Configs.TopsDistancePreserveRange != null)
-            Configs.TopsDistancePreserveRange.SettingChanged += OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinMinOffset != null)
-            Configs.TopsSkinMinOffset.SettingChanged += OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinSampleRadius != null)
-            Configs.TopsSkinSampleRadius.SettingChanged += OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinWeightFalloff != null)
-            Configs.TopsSkinWeightFalloff.SettingChanged += OnDistancePreserveParamChanged;
-        // SkinShrink 系も同 handler に乗せる: target skin 側の補正だが、再 Apply 経路は共通で問題ない。
-        if (Configs.TopsSkinShrink != null)
-            Configs.TopsSkinShrink.SettingChanged += OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinShrinkFalloffRadius != null)
-            Configs.TopsSkinShrinkFalloffRadius.SettingChanged += OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinShrinkSampleRadius != null)
-            Configs.TopsSkinShrinkSampleRadius.SettingChanged += OnDistancePreserveParamChanged;
+        // 距離保存 / SkinShrink / BreastFlatten 系 config の live tune は CostumeReflectionCoordinator が一元処理する。
         PatchLogger.LogInfo("[TopsLoader] Initialized");
     }
 
     private void OnDestroy()
     {
         SceneManager.sceneUnloaded -= OnSceneUnloaded;
-        if (Configs.TopsDistancePreserveRange != null)
-            Configs.TopsDistancePreserveRange.SettingChanged -= OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinMinOffset != null)
-            Configs.TopsSkinMinOffset.SettingChanged -= OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinSampleRadius != null)
-            Configs.TopsSkinSampleRadius.SettingChanged -= OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinWeightFalloff != null)
-            Configs.TopsSkinWeightFalloff.SettingChanged -= OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinShrink != null)
-            Configs.TopsSkinShrink.SettingChanged -= OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinShrinkFalloffRadius != null)
-            Configs.TopsSkinShrinkFalloffRadius.SettingChanged -= OnDistancePreserveParamChanged;
-        if (Configs.TopsSkinShrinkSampleRadius != null)
-            Configs.TopsSkinShrinkSampleRadius.SettingChanged -= OnDistancePreserveParamChanged;
-    }
-
-    /// <summary>
-    /// 距離保存系 Configs (<see cref="Configs.TopsDistancePreserveRange"/> / <see cref="Configs.TopsSkinMinOffset"/>)
-    /// 変更時にキャッシュを破棄して登録済み全 target を再適用する。
-    /// picker (F7) が閉じている状態でも F9 設定パネル等から値変更があれば即時反映される。
-    /// </summary>
-    private static void OnDistancePreserveParamChanged(object sender, System.EventArgs e)
-    {
-        InvalidateDistancePreserveCache();
-        // SkinShrink 系 Configs (TopsSkinShrink / Falloff / SampleR) も同 handler に subscribe している。
-        // SkinShrinkCoordinator の cache を破棄して、後続 ApplyDirectly → Apply → RegisterTops で再 push される。
-        // Bottoms-only の target (この loop で touch しない) を孤児化させないため、loop 後に
-        // RefreshAllByConfig で全 entry を refresh する。
-        SkinShrinkCoordinator.InvalidateCache();
-
-        // 同伴イベント等 (env != HoleScene) で live tune が走った場合、env.FindCharacter は env 側の char しか返さず、
-        // HoleScene preserved の Bar char は再 Apply 対象から外れる。InvalidateDistancePreserveCache /
-        // InvalidateCache で destroyed Mesh となった sharedMesh (mesh_costume / mesh_skin_*) を保持したまま
-        // Bar 復帰し SMR が消失する症状を防ぐため、env と HoleScene の両方で FindCharacter する。
-        var sys = GBSystem.Instance;
-        if (sys == null) return;
-        var env = sys.GetActiveEnvScene();
-        var holeScene = sys.GetHoleScene();
-        if (env == null && holeScene == null) return;
-
-        // 列挙中の操作で例外が出ないよう ToList でスナップショット
-        var snapshot = TopsOverrideStore.EnumerateOverrides().ToList();
-        if (snapshot.Count == 0) return;
-
-        int reapplied = 0;
-        // env と HoleScene の FindCharacter が同一 GameObject を返す場合 (Bar 滞在中の通常経路) に
-        // 二重 Apply を防ぐ。InstanceID が別なら両者をそのまま Apply する (companion event の Talk2DScene char と
-        // HoleScene preserved char は別 GameObject)。
-        var seen = new HashSet<int>();
-        foreach (var kv in snapshot)
-        {
-            var target = kv.Key;
-            var entry = kv.Value;
-            TryReapply(env?.FindCharacter(target), target, entry, seen, ref reapplied);
-            if (!ReferenceEquals(env, holeScene))
-                TryReapply(holeScene?.FindCharacter(target), target, entry, seen, ref reapplied);
-        }
-        // Tops が register されていない (Bottoms 単独) target の cache を InvalidateCache で消したまま
-        // にしないため、全 entry を refresh して整合を取る。Tops 側 ApplyDirectly で touch 済 entry も
-        // 重ねて refresh されるが cache hit で軽量。
-        SkinShrinkCoordinator.RefreshAllByConfig();
-        PatchLogger.LogDebug($"[TopsLoader] distance preserve param 変更 → {reapplied} 個 再適用 (登録 {snapshot.Count}, range={Configs.TopsDistancePreserveRange.Value:F4}m, minOffset={Configs.TopsSkinMinOffset.Value:F4}m, skinSampleR={Configs.TopsSkinSampleRadius.Value:F4}m, weightFalloff={Configs.TopsSkinWeightFalloff.Value:F4}m)");
-    }
-
-    private static void TryReapply(GameObject charObj, CharID target, TopsOverrideStore.Entry entry,
-        HashSet<int> seen, ref int reapplied)
-    {
-        if (charObj == null) return;
-        if (!seen.Add(charObj.GetInstanceID())) return;
-        try
-        {
-            // ApplyDirectly が内部で RestoreFor を呼ぶため事前 Restore は不要 (二重実行防止)。
-            // RestoreFor は GetComponentsInChildren + snapshot 全 key 線形列挙を伴うため、target 数 N で
-            // 2 倍コストになる。1 回に集約することで live tune 経路 (param 変更時に N 回ループ) のコストを半減。
-            ApplyDirectly(charObj, entry.DonorChar, entry.DonorCostume);
-            reapplied++;
-        }
-        catch (System.Exception ex)
-        {
-            PatchLogger.LogWarning($"[TopsLoader] live tune 再適用失敗: target={target}, donor={entry.DonorChar}/{entry.DonorCostume}: {ex}");
-        }
     }
 
     /// <summary>
@@ -230,6 +135,23 @@ public class TopsLoader : MonoBehaviour
     /// </summary>
     public static UniTask<bool> PreloadDonorAsync(CharID donor, CostumeType costume) =>
         s_cache.PreloadAsync(donor, costume);
+
+    /// <summary>
+    /// 指定 char の Babydoll skin donor preload から mesh_skin_upper / mesh_skin_lower SMR を取得する。
+    /// preload 未完 / SMR 不在で false（out は null）。
+    /// BreastFlatten native 経路の distance-preserve reference（donor=round Babydoll）取得に使う。
+    /// </summary>
+    internal static bool TryGetSkinDonorSmrs(
+        CharID charId, out SkinnedMeshRenderer skinUpper, out SkinnedMeshRenderer skinLower)
+    {
+        skinUpper = null;
+        skinLower = null;
+        if (charId >= CharID.NUM) return false;
+        if (!s_cache.TryGet((charId, SkinDonorCostume), out var donor) || donor.AllSmrs == null) return false;
+        skinUpper = donor.AllSmrs.FirstOrDefault(s => s != null && s.name == "mesh_skin_upper");
+        skinLower = donor.AllSmrs.FirstOrDefault(s => s != null && s.name == "mesh_skin_lower");
+        return skinUpper != null || skinLower != null;
+    }
 
     private static DonorEntry BuildDonorEntry(
         CharID donor, CostumeType costume, GameObject donorParent,
@@ -398,26 +320,17 @@ public class TopsLoader : MonoBehaviour
         var targetCharID = targetHandle?.GetCharID() ?? CharID.NUM;
 
         // base-aware additive モード:
-        //   target がフルボディ衣装（SwimWear / Bunnygirl / 分離型でない DLC）のときは
-        //   target の mesh_costume をそのまま残し、donor の Tops SMR を inject 経路で重ねる。
-        //   target の素肌 / 元衣装を維持できる。
-        //   donor=SwimWear (= "SwimWear に override する") のときは従来どおり swap で
-        //   target.mesh_costume を donor のものに置換し下半身パートも (c2) で transplant する。
-        bool additiveMode = (targetCostume?.IsFullBodyCostume() ?? false)
-                            && donorCostume != CostumeType.SwimWear;
+        //   target がフルボディ衣装（SwimWear / Bunnygirl / 分離型でない DLC）のときは常に additive(重ね着):
+        //   target の mesh_costume / 素肌 / skin_lower をそのまま残し、donor の Tops SMR を inject overlay する。
+        //   donor=SwimWear も additive に含める (旧: swap で full-body 置換していたが、(a) skin_upper のみ
+        //   Babydoll 化し skin_lower native のままで bottoms と不整合になる懸念、(b) 他 full-body 組合せとの
+        //   一貫性、の 2 点から重ね着へ統一。ワンピース水着の下半身は mesh_costume(Tops 候補) に内包され
+        //   ApplySmrPhase の additive inject で overlay される。plan 2026-05-30-swimwear-donor-additive)。
+        bool additiveMode = (targetCostume?.IsFullBodyCostume() ?? false);
 
-        // target がフルボディ衣装 (Bunnygirl / フルボディ DLC) + 通常モードでは Apply スキップ。
-        // フルボディスーツで構造差大のため Tops swap が中途半端に適用されると上半身だけ別衣装が乗る不整合が起きる。
-        // additive モードでは inject のみで target を一切 touch しないため許可する。
-        // target=SwimWear は除外: donor=SwimWear のとき ApplySwimWearBottomsPhase で full-body swap が成立するため。
-        // ApplyIfOverridden / ApplyDirectly 両経路で同じガードが効くよう Apply 側に置く。
-        if ((targetCostume?.IsFullBodyCostume() ?? false)
-            && targetCostume != CostumeType.SwimWear
-            && !additiveMode)
-        {
-            s_applied.Add(character.GetInstanceID()); // dedup ログを 1 回に抑える
-            return;
-        }
+        // full-body target は上記 additiveMode で常に additive(inject only) になり「中途半端 swap」が
+        // 原理的に起きないため、旧 full-body target ガード (cb31ad4) は撤去した
+        // (additiveMode=IsFullBodyCostume(target) の下で guard 条件は恒偽。plan 2026-05-30-swimwear-donor-additive)。
 
         if (!s_cache.TryGet((donorChar, donorCostume), out var donor))
         {
@@ -438,6 +351,9 @@ public class TopsLoader : MonoBehaviour
         if (donor.TopsSmrs == null || donor.TopsSmrs.Count == 0)
         {
             // donor が Tops を持たない = Tops contribution 不在。古い contribution が残っていれば削除。
+            // UnregisterTops が sharedMesh を OriginalSkinUpper に再捕獲する前に flatten clone を巻き戻す。
+            BreastFlattenApplier.RestoreFor(character);
+            BreastClothWeightShifter.RestoreFor(character);
             SkinShrinkCoordinator.UnregisterTops(character);
             s_applied.Add(instanceId);
             return;
@@ -467,6 +383,27 @@ public class TopsLoader : MonoBehaviour
         ApplyDistancePreservePhase(ref ctx);
 
         ApplySkinShrinkPhase(ref ctx);
+
+        // phase (g): SkinShrinkCoordinator の素焼き込み + push 完了後の live sharedMesh に flatten を被せる。
+        // OriginalSkinUpper には addressables stable asset (= Babydoll) が残り、Registry の native は真 native
+        // (target 元 skin_upper) を session 不変で保持し続ける。
+        BreastFlattenApplier.ApplyOverlay(character, targetCharID);
+        BreastClothTuner.ApplyFor(character, targetCharID);
+        // 移植 cloth は ApplyDistancePreservePhase で flatten 済 skin proxy に距離保存される。
+        // 頂点 flatten を重ねると二重収縮で破綻するため flattenVerts=false (weight shift のみ)。
+        // ただし additive (full-body target) では温存された target costume cloth(SwimWear swimsuit 等)が
+        // 距離保存対象外なので、pure-native と同じく頂点 flatten が要る。injected donor は距離保存済集合
+        // (distancePreservedSmrIds) で flat=false に固定し二重収縮を回避する。
+        if (ctx.AdditiveMode)
+        {
+            var preservedIds = new HashSet<int>(
+                ctx.SwappedTopsPairs.Where(p => p.Target != null).Select(p => p.Target.GetInstanceID()));
+            BreastClothWeightShifter.ApplyFor(character, targetCharID, flattenVerts: true, distancePreservedSmrIds: preservedIds);
+        }
+        else
+        {
+            BreastClothWeightShifter.ApplyFor(character, targetCharID, flattenVerts: false);
+        }
 
         // didSomething に関わらず Applied 登録（冪等性確保、再 setup() trigger 時の毎フレーム再走査回避）。
         // s_applied は scene 跨ぎで保持される (memory feedback_scene_unload_snapshot_clear.md)。
@@ -558,6 +495,9 @@ public class TopsLoader : MonoBehaviour
             foreach (var kv in donorByName)
             {
                 var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers);
+                // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を対称に守る
+                // (ApplySwimWearBottomsPhase の inject path と同型)。
+                Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
                 SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected,additive)");
                 ctx.SwappedTopsPairs.Add((injected, kv.Value));
@@ -570,6 +510,10 @@ public class TopsLoader : MonoBehaviour
             foreach (var kv in donorByName)
             {
                 if (!targetByName.TryGetValue(kv.Key, out var targetSmr)) continue;
+                // memory feedback_native_smr_registry_invariant: SwapSmr で sharedMesh を MOD donor mesh に
+                // 差し替える前に Registry に native を確定させる。Registry が単一権威となり、ApplyDirectly cycle
+                // 等の transient mesh 焼き込み race は構造的に発生しない (Phase 6 完了)。
+                Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSmr);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: targetSmr, injectedGo: null);
                 SwapSmr(targetSmr, kv.Value, ctx.Character, kv.Key);
                 ctx.SwappedTopsPairs.Add((targetSmr, kv.Value));
@@ -581,6 +525,8 @@ public class TopsLoader : MonoBehaviour
             {
                 if (targetByName.ContainsKey(kv.Key)) continue;
                 var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers);
+                // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を対称に守る。
+                Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
                 SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected)");
                 ctx.SwappedTopsPairs.Add((injected, kv.Value));
@@ -593,6 +539,9 @@ public class TopsLoader : MonoBehaviour
                 if (donorByName.ContainsKey(kv.Key)) continue;
                 // 既に inactive ならログ抑制（冪等）
                 if (!kv.Value.gameObject.activeSelf) continue;
+                // memory feedback_native_smr_registry_invariant: (a) と同方針。hide 経路でも
+                // Capture 直前に Registry に native を確定させる。
+                Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, kv.Value);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: kv.Value, injectedGo: null);
                 kv.Value.gameObject.SetActive(false);
                 PatchLogger.LogDebug($"[TopsLoader] target の {kv.Key} を隠す: {ctx.Character.name}（donor 側に無いため）");
@@ -610,7 +559,9 @@ public class TopsLoader : MonoBehaviour
     ///      Bottoms override が設定されている target は Bottoms 側に任せる（Bottoms override 優先）。
     ///      transplant した SMR は Tops snapshot 経由で RestoreFor が冪等に元に戻す。
     ///      mesh_costume_skirt は SwimWear donor 全般でループ内除外する（KANA SwimWear の bikini bottom もここで弾かれる）。
-    /// donorCostume == SwimWear → additiveMode == false 確定 (定義より additive 不到達)。
+    /// 本 phase は非 additive(分離型 base + SwimWear donor) のときのみ実行する。full-body base + SwimWear donor は
+    /// additive(重ね着) になり (additiveMode = IsFullBodyCostume(target))、target bottoms を hide しないため
+    /// 冒頭の `if (ctx.AdditiveMode) return;` で skip する (plan 2026-05-30-swimwear-donor-additive)。
     /// bottoms override 併用時も (c2) を走らせ順序非依存性を保証 (tops 先 / bottoms 先)。
     /// per-loader isolation: target 側のみ BottomsLoader 所有名を除外し、donor 側は除外しないため
     /// LUNA frill は inject 経路で重ねて両 frill 共存する。
@@ -618,6 +569,11 @@ public class TopsLoader : MonoBehaviour
     private static void ApplySwimWearBottomsPhase(ref TopsApplyContext ctx)
     {
         if (ctx.DonorCostume != CostumeType.SwimWear) return;
+        // additive(重ね着) では target の bottoms を hide/swap しない (= target を一切 touch しない原則)。
+        // SwimWear の bottoms 候補は one-piece=無し(下半身は mesh_costume に内包) / KANA=mesh_costume_skirt
+        // (物理破綻のため一律除外) なので additive で inject すべき bottoms SMR は存在しない。よって skip する。
+        // ワンピース水着の下半身は mesh_costume(Tops 候補) として ApplySmrPhase の additive inject で overlay される。
+        if (ctx.AdditiveMode) return;
 
         // BottomsLoader が触る name 集合。bottoms 領域は BottomsLoader の責任範囲として尊重。
         var bottomsOwned = new HashSet<string>(StringComparer.Ordinal);
@@ -667,6 +623,12 @@ public class TopsLoader : MonoBehaviour
         foreach (var kv in donorBottomsByName)
         {
             if (!targetBottomsByName.TryGetValue(kv.Key, out var targetSmr)) continue;
+            // memory feedback_native_smr_registry_invariant: ApplySmrPhase (a) と同型。SwapSmr で donor mesh に
+            // 置換する前に Registry に target の真 native を確定させる。これを忘れると phase (e)
+            // ApplyDistancePreserveForTops で donor mesh が native として焼かれ、Restore 時に
+            // smr.sharedMesh = TryGet(=donor mesh) で target が donor mesh のまま残る (SwimWear donor +
+            // common bottoms SMR 経路で発症するクラスの bug)。
+            Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSmr);
             CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: targetSmr, injectedGo: null);
             SwapSmr(targetSmr, kv.Value, ctx.Character, kv.Key);
             ctx.SwappedTopsPairs.Add((targetSmr, kv.Value));
@@ -677,6 +639,12 @@ public class TopsLoader : MonoBehaviour
         {
             if (targetBottomsByName.ContainsKey(kv.Key)) continue;
             var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers, referenceName: "mesh_skin_lower");
+            // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を
+            // 対称に守る。injected SMR は Restore で GameObject Destroy のため Registry 経由の Mesh 復元
+            // 経路は走らないが (実害無し)、phase (e) ApplyDistancePreserveForTops 経由の Registry 登録に
+            // 頼らず本 swap site で明示登録することで、phase (e) 未到達経路 (早期 abort / sharedMesh null
+            // 等) でも規約違反 LogError が出ない。
+            Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
             CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
             SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected)");
             ctx.SwappedTopsPairs.Add((injected, kv.Value));
@@ -687,6 +655,8 @@ public class TopsLoader : MonoBehaviour
         {
             if (donorBottomsByName.ContainsKey(kv.Key)) continue;
             if (!kv.Value.gameObject.activeSelf) continue;
+            // memory feedback_native_smr_registry_invariant: (a) と同方針。hide でも Capture 直前に Registry 確定。
+            Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, kv.Value);
             CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: kv.Value, injectedGo: null);
             kv.Value.gameObject.SetActive(false);
             PatchLogger.LogDebug($"[TopsLoader] target の {kv.Key} を隠す: {ctx.Character.name}（SwimWear donor 側に対応 SMR 無し）");
@@ -697,14 +667,21 @@ public class TopsLoader : MonoBehaviour
     /// <summary>
     /// (d) target.mesh_skin_upper を target/Babydoll に swap。bottoms override 等が
     /// Babydoll 基準で扱える前提を整える。skin donor は ApplyTopsAsync 側で先行 preload 済み。
+    /// 非 additive は常に swap (donor garment topology 前提)。additive (full-body target) は原則 skip だが
+    /// <see cref="BreastFlattenApplier.ShouldSwapSkinForFlatten"/> 成立時 (flatten>0 + breast cloth readable) のみ swap。
     /// skip した場合 (e) distance preservation は target 元 mesh_skin_upper 基準で走り、
     /// Babydoll 基準の境界整合は得られないが補正自体は破綻しない (フェイルセーフ)。
     /// </summary>
     private static void ApplySkinUpperPhase(ref TopsApplyContext ctx)
     {
-        if (ctx.AdditiveMode)
+        // 非 additive: donor garment が Babydoll skin topology 前提のため flatten 非依存で常に swap。
+        // additive (target=full-body 衣装): 通常は target 素肌維持で skip。ただし BreastFlatten 整合が要る
+        // (flatten>0 + breast cloth readable) ときは Babydoll に swap する
+        // (BottomsLoader.ApplySkinUpperBabydollPhase と共通判定。SwimWear+Tops+flatten で flatten が反映されない
+        //  穴の修正)。non-readable cloth(Bunnygirl 等) / flatten=0 は従来通り素肌維持。
+        if (ctx.AdditiveMode
+            && !BreastFlattenApplier.ShouldSwapSkinForFlatten(ctx.Character, ctx.TargetCharID))
         {
-            // additive モードでは target の素肌を維持するため skin upper swap は skip。
             PatchLogger.LogDebug($"[TopsLoader] skin upper swap skip: additive mode ({ctx.Character.name})");
             return;
         }
@@ -732,15 +709,11 @@ public class TopsLoader : MonoBehaviour
         var targetSkinUpper = ctx.Renderers.FirstOrDefault(s => s != null && s.name == "mesh_skin_upper");
         if (donorSkinUpper != null && targetSkinUpper != null)
         {
-            // ApplyDirectly (live tune) で 2 cycle に跨る連鎖 bug の入口防衛。
-            // cycle N: RestoreFor → UnregisterTops の RefreshOne が HasBottoms 残存時に
-            //   Bottoms push を upper にも適用し sharedMesh が transient Mesh に。直後の
-            //   CaptureSnapshotIfFirst が transient を OriginalMesh として焼き込む。
-            // cycle N+1: InvalidateCache が transient を Destroy → RestoreFor が
-            //   destroyed Mesh を sharedMesh に書き戻し → skin_upper 描画破損。
-            // capture 直前に Coordinator 保持の addressables stable asset へ明示 rewind し、
-            // snapshot には常に stable 参照のみ焼く。RefreshOne 仕様自体はそのまま維持。
-            SkinShrinkCoordinator.RestoreSkinUpperToOriginal(ctx.Character, targetSkinUpper);
+            // memory feedback_native_smr_registry_invariant: SwapSmr で sharedMesh を Babydoll donor mesh に
+            // 差し替える前に Registry に native を確定させる。これにより RestoreFor の TryGet が真 native
+            // (target 元 skin_upper) を返し、Phase 6 で `?? snap.OriginalMesh` fallback を撤廃しても
+            // Tops Override 解除時に mesh_skin_upper が null 代入される regression を防ぐ。
+            Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSkinUpper);
             CaptureSnapshotIfFirst((ctx.InstanceId, "mesh_skin_upper"), wasInjected: false, smr: targetSkinUpper, injectedGo: null);
             SwapSmr(targetSkinUpper, donorSkinUpper, ctx.Character, "mesh_skin_upper");
             bool selfDonor = ctx.DonorChar == ctx.TargetCharID;
@@ -761,15 +734,16 @@ public class TopsLoader : MonoBehaviour
     ///     additive モードでも injected donor pair を同手順で補正する。フルボディ衣装 additive
     ///     (Bunnygirl / フルボディ DLC) は live skin (variant) と Babydoll skin の頂点配置が乖離し
     ///     ユーザー判断でリスク受容
-    ///     (実機で破綻が出たら別計画で skip ガード追加する。
-    ///      参照: docs/superpowers/plans/2026-05-08-additive-tops-vertex-adjust.md)。
+    ///     (実機で破綻が出たら別計画で skip ガード追加する)。
     ///     donor Babydoll preload 失敗 / mesh_skin_upper SMR 不在 / target 側不在のいずれかで skip (Apply 本体は続行)。
     /// </summary>
     private static void ApplyDistancePreservePhase(ref TopsApplyContext ctx)
     {
         // (a)(b)(c) ApplySmrPhase と (c2) ApplySwimWearBottomsPhase の両方で SwappedTopsPairs.Add されない
-        // ケース (例: donor.TopsSmrs.Count == 0 は Apply 冒頭で early return するので到達しない / SwimWear donor で
-        // Bottoms 候補も 0) のみ skip。それ以外では preload 失敗時に内部で warning + skip する。
+        // ケースのみ skip。例: donor.TopsSmrs.Count == 0 は Apply 冒頭で early return するので到達しない /
+        // 非 additive SwimWear donor で Bottoms 候補も 0（additive SwimWear donor は ApplySmrPhase が
+        // donor Tops=mesh_costume 等を inject して Add するため到達する）。それ以外では preload 失敗時に
+        // 内部で warning + skip する。
         if (ctx.SwappedTopsPairs.Count == 0) return;
 
         // donor 側 Babydoll skin (upper + lower) を取得。
@@ -796,6 +770,12 @@ public class TopsLoader : MonoBehaviour
         var targetSkinUpper = targetSkinDonor.AllSmrs.FirstOrDefault(s => s != null && s.name == "mesh_skin_upper");
         var targetSkinLower = targetSkinDonor.AllSmrs.FirstOrDefault(s => s != null && s.name == "mesh_skin_lower");
 
+        // BreastFlatten 適用後の skin に上着が追従するよう、target 側 upper を flatten 済 proxy SMR に
+        // 差し替える。amount = 0 なら null が返り preload SMR を使う (= 既存挙動)。
+        // lower は flatten 対象外なのでそのまま preload を渡す。
+        targetSkinUpper = BreastFlattenApplier.GetFlattenedReferenceSmr(targetSkinUpper, ctx.TargetCharID)
+                          ?? targetSkinUpper;
+
         // upper / lower のどちらか一方でも取れていれば続行。両方無いと結合 verts=0 になり Preserve 内で warning + skip。
         if (donorSkinUpper == null && donorSkinLower == null)
         {
@@ -810,9 +790,23 @@ public class TopsLoader : MonoBehaviour
 
         var donorSkinSmrs = new[] { donorSkinUpper, donorSkinLower };
         var targetSkinSmrs = new[] { targetSkinUpper, targetSkinLower };
+        // breast push-out は additive 重ね着 (full-body target + 上着 inject) のときだけ有効。
+        // 非 additive (分離衣装 swap) は肌 push (PushSkinUnderCloth) が貫通を吸収するため 0 = 既存挙動。
+        float breastPushOut = ctx.AdditiveMode ? Configs.TopsAdditiveBreastPushOut.Value : 0f;
+        // 谷間 delta 縮小: flatten 適用時のみ有効。flatten OFF だと target skin が丸いまま (push≈0) で
+        // cleavage shrink が谷間を不要に沈めるため gate する (proxy 化 GetFlattenedReferenceSmr と同条件で連動)。
+        // additive/非 additive 両対応 (谷間浮きは両モードで起きる)。
+        // 谷間 shrink 強度はキャラ個別 flat 量に線形比例 (effectiveShrink = config × amount)。
+        // flat が浅いほど谷間の浮きも小さいので沈め過ぎを防ぐ。amount ∈ [0,1.0]。
+        float flattenAmount = BreastFlattenApplier.ResolveAmount(ctx.TargetCharID);
+        bool flattenActive = flattenAmount > 0f;   // IsFlattenActive (= ResolveAmount>0) と等価
+        float cleavageShrink = flattenActive ? Configs.BreastFlattenCleavageShrink.Value * flattenAmount : 0f;
+        // width も flatten ゲート対象。出力は shrink=0 で no-op だが、flatten OFF で width だけ live-tune した時に
+        // 視覚変化なしで distance-preserve cache を無効化＝無駄再計算するのを防ぐ（shrink と対称化）。
+        float cleavageWidth = flattenActive ? Configs.BreastFlattenCleavageWidth.Value : 0f;
         foreach (var pair in ctx.SwappedTopsPairs)
         {
-            ApplyDistancePreserveForTops(pair.Target, pair.DonorPreload, donorSkinSmrs, targetSkinSmrs);
+            ApplyDistancePreserveForTops(ctx.Character, pair.Target, pair.DonorPreload, donorSkinSmrs, targetSkinSmrs, breastPushOut, cleavageShrink, cleavageWidth);
         }
     }
 
@@ -820,11 +814,14 @@ public class TopsLoader : MonoBehaviour
     /// (f) Tops SkinShrink: target.mesh_skin_upper を tops より内側へ push して z-fighting / 貫通を解消。
     ///     SkinShrinkCoordinator が Bottoms contribution と統合管理し、両 contribution を素 mesh から
     ///     順次 push し直すため、Tops/Bottoms 同時適用や片方 Restore で他方が崩れない。
-    ///     additive モードでは (d) skin_upper Babydoll swap が走らず RegisterTops の API 契約
-    ///     (現 sharedMesh = Babydoll asset を OriginalSkinUpper として焼く) を満たせないため skip。
-    ///     フルボディ衣装 (SwimWear / Bunnygirl / フルボディ DLC) では mesh_costume が body を覆うため
-    ///     SkinShrink の視覚効果も限定的。
-    ///     additive で SkinShrink を有効化する場合は Coordinator API の改修が必要 (別計画)。
+    ///     additive モードでは RegisterTops を常に skip (SkinShrink push を付けない)。
+    ///     (d) skin_upper Babydoll swap は flatten 整合時のみ走る (ShouldSwapSkinForFlatten) が、その場合でも
+    ///     additive の push は付けない方針 = swap 済 Babydoll skin は flat になるが push 補正なし
+    ///     (Bottoms hide-only と同じ構造的非対称)。else 分岐は swap 済 Babydoll を壊さない:
+    ///     BreastFlattenApplier.RestoreFor は Tops-kind snapshot を触らず (RestoreNativeSkinSwap は
+    ///     BreastFlatten-kind のみ)、UnregisterTops は Tops-only で Coordinator entry 不在のため no-op。
+    ///     フルボディ衣装では mesh_costume が body を覆うため SkinShrink の視覚効果も限定的。
+    ///     additive で SkinShrink push を有効化する場合は Coordinator API の改修が必要 (別計画)。
     ///     swap 無し / Bottoms only donor 経路は contribution 不在 → UnregisterTops。
     /// </summary>
     private static void ApplySkinShrinkPhase(ref TopsApplyContext ctx)
@@ -841,6 +838,11 @@ public class TopsLoader : MonoBehaviour
         else
         {
             // 古い Tops contribution が残っていれば削除。Bottoms 残存なら Bottoms 単独で refresh される。
+            // additive mode で phase (d) skip 時は flatten clone が sharedMesh に残ったままなので、
+            // UnregisterTops の再捕獲前に巻き戻す。non-additive では phase (d) Babydoll swap で
+            // 既に clone reference は外れているが、保険として両 mode 共通で呼ぶ。
+            BreastFlattenApplier.RestoreFor(ctx.Character);
+            BreastClothWeightShifter.RestoreFor(ctx.Character);
             SkinShrinkCoordinator.UnregisterTops(ctx.Character);
         }
     }
@@ -851,10 +853,14 @@ public class TopsLoader : MonoBehaviour
     /// 結果は <see cref="s_resolvedCache"/> にキャッシュ、二重補正は <see cref="s_resolvedAppliedIds"/> でガード。
     /// </summary>
     private static void ApplyDistancePreserveForTops(
+        GameObject character,                       // Registry key 用の character。transform.root だと m_chara の親が返るので不可
         SkinnedMeshRenderer topSmr,
         SkinnedMeshRenderer donorPreloadSmr,        // donor 元 SMR (preload エントリ)。bones / boneWeights を持つ
         SkinnedMeshRenderer[] donorSkinSmrs,        // donor 側 Babydoll skin SMR 列 [upper, lower]（null 要素可）
-        SkinnedMeshRenderer[] targetSkinSmrs)       // target 側 Babydoll skin SMR 列 [upper, lower]（null 要素可）
+        SkinnedMeshRenderer[] targetSkinSmrs,       // target 側 Babydoll skin SMR 列 [upper, lower]（null 要素可）
+        float breastPushOut,                        // additive 重ね着の胸 push-out (m)。非 additive は 0
+        float cleavageShrink,                       // 谷間 delta 縮小強度 [0,1]。flatten OFF は呼出元が 0
+        float cleavageWidth)                        // 谷間帯幅（halfSep 比）
     {
         if (topSmr == null || topSmr.sharedMesh == null) return;
         if (donorPreloadSmr == null || donorPreloadSmr.sharedMesh == null) return;
@@ -870,6 +876,10 @@ public class TopsLoader : MonoBehaviour
         int tUp = SkinId(targetSkinSmrs, 0);
         int tLo = SkinId(targetSkinSmrs, 1);
         var cacheKey = (donorMesh.GetInstanceID(), dUp, dLo, tUp, tLo);
+        // 注: cacheKey に breastPushOut は含めない。additive 性は per-target costume で固定のため同一 donorMesh
+        //     instance に対し breastPushOut は不変、かつ config 変更時は CostumeReflectionCoordinator.Flush →
+        //     InvalidateDistancePreserveCache() が cache + s_resolvedAppliedIds を Clear する。将来 donorMesh
+        //     instance が additive/非 additive 経路で共有される設計に変えるなら key へ含める必要がある。
 
         // ribbon 系除外は MeshDistancePreserver.Preserve 内 (donorBoneIsRibbon mask) で per-vert 判定する。
         // SMR 名ベースだと同一 mesh 内 ribbon 部 + 非 ribbon 部混在に対応できないため。
@@ -883,6 +893,12 @@ public class TopsLoader : MonoBehaviour
                 minOffset: Configs.TopsSkinMinOffset.Value,
                 skinSampleRadius: Configs.TopsSkinSampleRadius.Value,
                 weightFalloffOuter: Configs.TopsSkinWeightFalloff.Value,
+                smoothIterations: Configs.DistancePreserveSmoothIterations.Value,
+                smoothStrength: Configs.DistancePreserveSmoothStrength.Value,
+                breastPushOut: breastPushOut,
+                // 谷間縮小: flatten ON 時のみ呼出元 (ApplyDistancePreservePhase) が有効値を渡す。additive/非 additive 両対応。
+                cleavageShrink: cleavageShrink,
+                cleavageWidth: cleavageWidth,
                 logTag: "TopsLoader");
             s_resolvedCache[cacheKey] = resolved;
             // s_resolvedAppliedIds には resolved (補正後) Mesh の InstanceID のみを記録する。
@@ -891,7 +907,19 @@ public class TopsLoader : MonoBehaviour
             if (resolved != null) s_resolvedAppliedIds.Add(resolved.GetInstanceID());
         }
 
-        if (resolved != null) topSmr.sharedMesh = resolved;
+        if (resolved != null)
+        {
+            // memory feedback_native_smr_registry_invariant: resolved (_distpres clone) を sharedMesh に
+            // 書く前に Registry に native を確定させる。ApplySmrPhase の (a) swap 経路で既登録済の SMR は
+            // existing entry を return (no-op)。(b) inject / (c2) ApplySwimWearBottomsPhase で touch された
+            // SMR は本箇所で初めて Registry 登録される (sharedMesh = SwapSmr 後の donor mesh、
+            // addressables stable で suffix 無し → 規約違反 LogError は出ない)。
+            // 注: character は ctx.Character (m_chara) を渡す。topSmr.transform.root は CharacterHandle.SetParent
+            // で m_chara が EnvSceneBase root に親付けされているため m_chara より上を返し、phase (g) の
+            // BreastClothWeightShifter.ApplyFor(character=m_chara) と Registry key が食い違う。
+            Internal.NativeSmrRegistry.GetOrCapture(character, topSmr);
+            topSmr.sharedMesh = resolved;
+        }
     }
 
     /// <summary>
@@ -943,16 +971,29 @@ public class TopsLoader : MonoBehaviour
                 {
                     smr.gameObject.SetActive(snap.OriginalActive);
                     smr.enabled = snap.OriginalEnabled;
-                    smr.sharedMesh = snap.OriginalMesh;
+                    // memory feedback_native_smr_registry_invariant: Registry が native の単一権威 (Phase 6 完了)。
+                    // TryGet の O(N) 全 entry 走査は本 discrete RestoreFor 経路 / RestoreSmr 経路のみで
+                    // 呼出され毎フレーム hot path 無し。SMR 数十 × char 12 = ~360 entry / RestoreFor 内 SMR
+                    // 数回呼出で μs オーダー。性能問題が出た時のみ smr InstanceID → char の逆引き index を追加する。
+                    // Registry が fake-null/未登録の場合は null 代入で SMR 非描画になる (元から null と同等の意図動作)。
+                    smr.sharedMesh = Internal.NativeSmrRegistry.TryGet(smr);
                     if (snap.OriginalBones != null) smr.bones = snap.OriginalBones;
                     if (snap.OriginalMaterials != null) smr.sharedMaterials = snap.OriginalMaterials;
                 }
             }
             SmrSnapshotStore.Remove(SnapshotKind.Tops, instanceId, smrKind, isInjected);
         }
+        // BreastFlatten clone を Destroy しておかないと、UnregisterTops → OriginalSkinUpper 再捕獲が
+        // flatten clone を「素」として焼き込んでしまう。SkinShrinkCoordinator の addressables stable
+        // contract を維持するため、ここで先に clone を回収する。SMR snapshot 復元ループ (上記) が
+        // 既に smr.sharedMesh = addressables 原本に戻しているのでケース A 経路、Destroy のみ実行。
+        BreastFlattenApplier.RestoreFor(character);
+        BreastClothWeightShifter.RestoreFor(character);
+
         // SkinShrinkCoordinator から Tops contribution を削除する。Bottoms 残存なら Coordinator 内で
         // skin_upper.sharedMesh を直前に戻した target 元 asset から Bottoms-only push し直す。
-        // API 契約: 上記 foreach で snap.OriginalMesh を skin_upper.sharedMesh に書き戻し済みの状態で呼ぶ。
+        // API 契約: 上記 foreach で Registry の native (= target 元 asset) を skin_upper.sharedMesh に
+        // 書き戻し済みの状態で呼ぶ。
         SkinShrinkCoordinator.UnregisterTops(character);
         s_applied.Remove(instanceId);
         if (restoredAny)

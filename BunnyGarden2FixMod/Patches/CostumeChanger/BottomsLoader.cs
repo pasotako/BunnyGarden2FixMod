@@ -122,25 +122,13 @@ public class BottomsLoader : MonoBehaviour
         s_cache.SetHostRoot(s_loaderHostRoot);
         DonorPreloadRegistry.Register(s_cache.IsHostParent);
         SceneManager.sceneUnloaded += OnSceneUnloaded;
-        // BottomsSkinShrink 系は live tune (F9 設定パネル等) で値が変わると即時反映する。
-        if (Configs.BottomsSkinShrink != null)
-            Configs.BottomsSkinShrink.SettingChanged += OnBottomsSkinShrinkParamChanged;
-        if (Configs.BottomsSkinShrinkFalloffRadius != null)
-            Configs.BottomsSkinShrinkFalloffRadius.SettingChanged += OnBottomsSkinShrinkParamChanged;
-        if (Configs.BottomsSkinShrinkSampleRadius != null)
-            Configs.BottomsSkinShrinkSampleRadius.SettingChanged += OnBottomsSkinShrinkParamChanged;
+        // BottomsSkinShrink 系 config の live tune は CostumeReflectionCoordinator が一元処理する。
         PatchLogger.LogInfo("[BottomsLoader] Initialized (lazy preload mode)");
     }
 
     private void OnDestroy()
     {
         SceneManager.sceneUnloaded -= OnSceneUnloaded;
-        if (Configs.BottomsSkinShrink != null)
-            Configs.BottomsSkinShrink.SettingChanged -= OnBottomsSkinShrinkParamChanged;
-        if (Configs.BottomsSkinShrinkFalloffRadius != null)
-            Configs.BottomsSkinShrinkFalloffRadius.SettingChanged -= OnBottomsSkinShrinkParamChanged;
-        if (Configs.BottomsSkinShrinkSampleRadius != null)
-            Configs.BottomsSkinShrinkSampleRadius.SettingChanged -= OnBottomsSkinShrinkParamChanged;
     }
 
     /// <summary>
@@ -202,70 +190,6 @@ public class BottomsLoader : MonoBehaviour
     private static void OnSceneUnloaded(Scene scene)
     {
         SkinShrinkCoordinator.ClearScene();
-    }
-
-    /// <summary>
-    /// BottomsSkinShrink 系 Configs (<see cref="Configs.BottomsSkinShrink"/> /
-    /// <see cref="Configs.BottomsSkinShrinkFalloffRadius"/> / <see cref="Configs.BottomsSkinShrinkSampleRadius"/>)
-    /// 変更時にキャッシュを破棄して登録済み全 target を再適用する。
-    /// picker (F7) が閉じている状態でも F9 設定パネル等から値変更があれば即時反映される。
-    /// Tops は distance preserve 機構と handler 共有 (OnDistancePreserveParamChanged) だが、
-    /// Bottoms は distance preserve を持たないため SkinShrink 専用 handler。
-    /// </summary>
-    private static void OnBottomsSkinShrinkParamChanged(object sender, System.EventArgs e)
-    {
-        SkinShrinkCoordinator.InvalidateCache();
-
-        // 同伴イベント等 (env != HoleScene) で live tune が走った場合、env.FindCharacter は env 側の char しか返さず、
-        // HoleScene preserved の Bar char は再 Apply 対象から外れる。InvalidateCache で destroyed Mesh となった
-        // mesh_skin_* の sharedMesh を保持したまま Bar 復帰すると skin が消失するため、env と HoleScene の両方で
-        // FindCharacter する (TopsLoader.OnDistancePreserveParamChanged と同方針)。
-        var sys = GBSystem.Instance;
-        if (sys == null) return;
-        var env = sys.GetActiveEnvScene();
-        var holeScene = sys.GetHoleScene();
-        if (env == null && holeScene == null) return;
-
-        // 列挙中の操作で例外が出ないよう ToList でスナップショット
-        var snapshot = BottomsOverrideStore.EnumerateOverrides().ToList();
-        if (snapshot.Count == 0) return;
-
-        int reapplied = 0;
-        // env と HoleScene の FindCharacter が同一 GameObject を返す場合 (Bar 滞在中の通常経路) に
-        // 二重 Apply を防ぐ。InstanceID が別なら両者をそのまま Apply する (companion event の Talk2DScene char と
-        // HoleScene preserved char は別 GameObject)。
-        var seen = new HashSet<int>();
-        foreach (var kv in snapshot)
-        {
-            var target = kv.Key;
-            var entry = kv.Value;
-            TryReapply(env?.FindCharacter(target), target, entry, seen, ref reapplied);
-            if (!ReferenceEquals(env, holeScene))
-                TryReapply(holeScene?.FindCharacter(target), target, entry, seen, ref reapplied);
-        }
-        // Bottoms が register されていない (Tops 単独) target の cache を InvalidateCache で消したまま
-        // にしないため、全 entry を refresh して整合を取る。Bottoms 側 ApplyDirectly で touch 済 entry も
-        // 重ねて refresh されるが cache hit で軽量。
-        SkinShrinkCoordinator.RefreshAllByConfig();
-        PatchLogger.LogDebug($"[BottomsLoader] BottomsSkinShrink param 変更 → {reapplied} 個 再適用 (登録 {snapshot.Count}, push={Configs.BottomsSkinShrink.Value:F4}m, fade={Configs.BottomsSkinShrinkFalloffRadius.Value:F4}m, sampleR={Configs.BottomsSkinShrinkSampleRadius.Value:F3}m)");
-    }
-
-    private static void TryReapply(GameObject charObj, CharID target, BottomsOverrideStore.Entry entry,
-        HashSet<int> seen, ref int reapplied)
-    {
-        if (charObj == null) return;
-        if (!seen.Add(charObj.GetInstanceID())) return;
-        try
-        {
-            // ApplyDirectly が Apply → SkinShrinkCoordinator.RegisterBottoms を呼ぶ。Coordinator が
-            // 内部で skin SMR を素 mesh に rewind してから新 param で push し直すため累積補正は防がれる。
-            ApplyDirectly(charObj, entry.DonorChar, entry.DonorCostume);
-            reapplied++;
-        }
-        catch (System.Exception ex)
-        {
-            PatchLogger.LogWarning($"[BottomsLoader] live tune 再適用失敗: target={target}, donor={entry.DonorChar}/{entry.DonorCostume}: {ex}");
-        }
     }
 
     /// <summary>
@@ -371,9 +295,10 @@ public class BottomsLoader : MonoBehaviour
         var instanceId = character.GetInstanceID();
         if (s_applied.Contains(instanceId)) return; // 多重 Apply ガード
 
-        // CaptureSnapshotIfFirst が SMR.sharedMesh を捕獲するより前に、target の MagicaCloth が
+        // CaptureSnapshotIfFirst が active/enabled/bones/materials を捕獲するより前に、target の MagicaCloth が
         // SMR に書き込んだ customMesh を originalMesh (build 時 cache asset) に巻き戻しておく。
-        // これで snap.OriginalMesh が customMesh dispose の影響を受けない stable Mesh asset になる。
+        // これで Registry が NativeSmrRegistry.GetOrCapture 経由で焼く native mesh も customMesh dispose の
+        // 影響を受けない stable Mesh asset になる。
         MagicaClothRebuilder.NormalizeSmrMeshBeforeSwap(character);
 
         // donor が bottoms を一切持たない場合（例: RIN/MIUKA SwimWear はワンピース型で skirt/pants 無し）も
@@ -393,9 +318,24 @@ public class BottomsLoader : MonoBehaviour
             DidSomething = false,
         };
 
+        var bottomsCharId = targetHandle?.GetCharID() ?? CharID.NUM;
+
         ApplySmrPhase(ref ctx);
 
+        // BreastFlatten>0 + Bottoms-only では上半身が native のままで cloth(flatten 済 Babydoll proxy 基準)と
+        // 不整合になり素肌が上着からはみ出す。RegisterBottoms(ApplySkinShrinkPhase)が OriginalSkinUpper を
+        // 捕捉する前に skin_upper を Babydoll へ swap する (TopsLoader.ApplySkinUpperPhase と同型・対称)。
+        ApplySkinUpperBabydollPhase(ref ctx, bottomsCharId, targetCostume);
+
         ApplySkinShrinkPhase(ref ctx);
+
+        // phase (g) 相当: Bottoms 単独移植 cycle で SkinShrink push 完了後の sharedMesh に flatten を被せる。
+        // Tops 移植も同時に走るケースは TopsLoader.Apply 側の hook が後勝ちで OK (Tops Apply は通常 Bottoms Apply の後)。
+        // 注: pure-native flatten の肌 push (SkinShrink) は BreastFlattenApplier.ApplyOverlay 内 (PushSkinUnderCloth) が
+        // 担うが pure-native gate (Tops/Bottoms override 皆無) のときのみ。Bottoms override がある本 cycle では
+        // SkinShrinkCoordinator (ApplySkinShrinkPhase) が肌 push 済みのため ApplyOverlay の push は走らない。
+        BreastFlattenApplier.ApplyOverlay(character, bottomsCharId);
+        BreastClothTuner.ApplyFor(character, bottomsCharId);
 
         // didSomething に関わらず Applied 登録（冪等性確保、再 setup() trigger 時の毎フレーム再走査回避）。
         // s_applied は scene 跨ぎで保持される (memory feedback_scene_unload_snapshot_clear.md)。
@@ -517,6 +457,8 @@ public class BottomsLoader : MonoBehaviour
             foreach (var kv in donorByName)
             {
                 var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers);
+                // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を対称に守る。
+                Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
                 SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected,additive)");
                 ctx.SwappedBottomsPairs.Add((injected, kv.Value));
@@ -529,6 +471,9 @@ public class BottomsLoader : MonoBehaviour
             foreach (var kv in donorByName)
             {
                 if (!targetByName.TryGetValue(kv.Key, out var targetSmr)) continue;
+                // memory feedback_native_smr_registry_invariant: SwapSmr で sharedMesh を MOD donor mesh に
+                // 差し替える前に Registry に native を確定させる。TopsLoader と対称。
+                Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSmr);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: targetSmr, injectedGo: null);
                 SwapSmr(targetSmr, kv.Value, ctx.Character, kv.Key);
                 ctx.SwappedBottomsPairs.Add((targetSmr, kv.Value));
@@ -540,6 +485,8 @@ public class BottomsLoader : MonoBehaviour
             {
                 if (targetByName.ContainsKey(kv.Key)) continue;
                 var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers);
+                // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を対称に守る。
+                Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
                 SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected)");
                 ctx.SwappedBottomsPairs.Add((injected, kv.Value));
@@ -554,6 +501,8 @@ public class BottomsLoader : MonoBehaviour
                 if (donorByName.ContainsKey(kv.Key)) continue;
                 // 既に inactive ならログ抑制（冪等）
                 if (!kv.Value.gameObject.activeSelf) continue;
+                // memory feedback_native_smr_registry_invariant: (a) と同方針。
+                Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, kv.Value);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: kv.Value, injectedGo: null);
                 kv.Value.gameObject.SetActive(false);
                 PatchLogger.LogDebug($"[BottomsLoader] target の {kv.Key} を隠す: {ctx.Character.name}（donor 側に無いため）");
@@ -587,8 +536,75 @@ public class BottomsLoader : MonoBehaviour
         {
             // (c) の hide のみ (donor が bottoms 持たない RIN/MIUKA SwimWear) → 古い Bottoms contribution が
             // あれば削除し、Tops も無ければ skin SMR を素 mesh に戻す。
+            // UnregisterBottoms の再捕獲前に flatten clone を巻き戻す (Tops 側と同方針)。
+            BreastFlattenApplier.RestoreFor(ctx.Character);
             SkinShrinkCoordinator.UnregisterBottoms(ctx.Character);
         }
+    }
+
+    /// <summary>
+    /// BreastFlatten&gt;0 + Bottoms のとき、上半身 mesh_skin_upper を target/Babydoll に swap する
+    /// (<see cref="TopsLoader.ApplySkinUpperPhase"/> と同型・対称)。BreastFlatten の cloth(上着/swimsuit) は
+    /// flatten 済 Babydoll proxy 基準で距離保存されるため、視覚 skin も Babydoll に揃えないと素肌が
+    /// cloth からはみ出す。<see cref="ApplySkinShrinkPhase"/>(=RegisterBottoms) が OriginalSkinUpper を
+    /// 捕捉する前に呼ぶこと (RegisterBottoms が Babydoll asset を素として捕捉できる)。
+    ///
+    /// snapshot は Bottoms 種別で取る。<see cref="RestoreFor"/> の復元ループが skin_upper を native(stable) に
+    /// 戻すため、後段の <see cref="BreastFlattenApplier.RestoreFor"/> は case A になり transient を sharedMesh に
+    /// 書き戻さない (Tops 経路と同じ安全性)。
+    ///
+    /// gate (いずれかで skip):
+    ///   - <see cref="BreastFlattenApplier.ShouldSwapSkinForFlatten"/> が false: flatten=0 / charId 無効 /
+    ///     breast cloth non-readable(Bunnygirl 等) のいずれか → native 維持。readable cloth の SwimWear 等
+    ///     full-body は flatten>0 なら swap する (TopsLoader.ApplySkinUpperPhase の additive 分岐と共通判定)。
+    ///   - Tops override 有: TopsLoader.ApplySkinUpperPhase が担当 (二重 swap 防止)。
+    ///   - target が既に Babydoll: 冪等 skip。
+    ///   - target Babydoll skin donor 未 preload: skip(warn)。境界整合不全のまま続行。
+    ///
+    /// 注: donor が bottoms 候補を持たない hide-only ケース (RIN/MIUKA SwimWear 等。additive+flatten も該当) では
+    /// 後段の <see cref="ApplySkinShrinkPhase"/> が SwappedBottomsPairs=0 で else 分岐に入り skirt push が走らない
+    /// (skin_upper swap のみ適用)。視覚 skin は Babydoll に揃うが SkinShrink 補正は付かない
+    /// (TopsLoader 側 hide-only と同じ構造的非対称。push 前提のコードを後から足さないこと)。
+    /// </summary>
+    private static void ApplySkinUpperBabydollPhase(ref BottomsApplyContext ctx, CharID targetCharID, CostumeType? targetCostume)
+    {
+        // flatten 駆動 swap の共通判定 (charId 有効 + flatten>0 + breast cloth readable)。
+        // flatten OFF は native 維持。non-readable cloth(Bunnygirl 等)は skin だけ Babydoll-flat にすると
+        // bust 不整合になるため native 維持 (pure-native の HasUnflattenableBreastCloth skip と一貫)。
+        if (!BreastFlattenApplier.ShouldSwapSkinForFlatten(ctx.Character, targetCharID)) return;
+        if (TopsOverrideStore.TryGet(targetCharID, out _)) return;  // Tops override 時は TopsLoader が担当
+        if (targetCostume == TopsLoader.SkinDonorCostume) return;  // 既に Babydoll = 冪等
+
+        if (!TopsLoader.TryGetSkinDonorSmrs(targetCharID, out var donorSkinUpper, out _)
+            || donorSkinUpper == null || donorSkinUpper.sharedMesh == null)
+        {
+            PatchLogger.LogWarning($"[BottomsLoader] skin donor (target/{TopsLoader.SkinDonorCostume}) 未ロードで skin upper Babydoll swap スキップ ({ctx.Character.name})");
+            return;
+        }
+
+        var targetSkinUpper = ctx.Renderers.FirstOrDefault(s => s != null && s.name == "mesh_skin_upper");
+        if (targetSkinUpper == null)
+        {
+            PatchLogger.LogDebug($"[BottomsLoader] skin upper Babydoll swap skip: mesh_skin_upper SMR 不在 ({ctx.Character.name})");
+            return;
+        }
+
+        // memory feedback_native_smr_registry_invariant: SwapSmr で sharedMesh を Babydoll donor mesh に
+        // 差し替える前に Registry に native を確定させる。これにより RestoreFor の TryGet が真 native
+        // (target 元 skin_upper) を返し、Phase 6 で `?? snap.OriginalMesh` fallback を撤廃しても
+        // Bottoms+BreastFlatten 経路で mesh_skin_upper が null 代入される regression を防ぐ。
+        Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSkinUpper);
+        CaptureSnapshotIfFirst((ctx.InstanceId, "mesh_skin_upper"), wasInjected: false, smr: targetSkinUpper, injectedGo: null);
+        // skin_upper は透過レイヤではないので Tops 側と同じく skipActivateForTransparentLayer:false で swap
+        // (BottomsLoader の private SwapSmr ラッパは透過 skirt 用に true 固定なので使わない)。
+        CostumeMeshSwapper.SwapSmr(targetSkinUpper, donorSkinUpper, ctx.Character, "BottomsLoader", skipActivateForTransparentLayer: false);
+        // swap 後の Babydoll(stable) を OriginalSkinUpper に同期。初回と再 apply で担い手が排他:
+        //   初回: entry 不在で本 rebase は no-op → 直後の RegisterBottoms が null 捕捉で Babydoll を設定。
+        //   再 apply: 前回 entry 残存で本 rebase が Babydoll を設定 → RegisterBottoms は非 null 据置で skip。
+        // どちらでも RegisterBottoms 完了時点で OriginalSkinUpper=Babydoll(stable) が保証される。
+        SkinShrinkCoordinator.RebaseOriginalSkinUpper(ctx.Character, donorSkinUpper.sharedMesh);
+        ctx.DidSomething = true;
+        PatchLogger.LogDebug($"[BottomsLoader] skin upper Babydoll swap: {targetCharID}/{TopsLoader.SkinDonorCostume} → {ctx.Character.name}");
     }
 
     /// <summary>
@@ -627,6 +643,7 @@ public class BottomsLoader : MonoBehaviour
         var instanceId = character.GetInstanceID();
         var renderers = character.GetComponentsInChildren<SkinnedMeshRenderer>(true);
         bool restoredAny = false;
+        bool restoredSkinUpper = false;   // skin_upper snapshot を native(stable) に戻したか (rebase 判定用)
 
         var entries = SmrSnapshotStore.EnumerateForInstance(SnapshotKind.Bottoms, instanceId);
 
@@ -655,13 +672,39 @@ public class BottomsLoader : MonoBehaviour
                 {
                     smr.gameObject.SetActive(snap.OriginalActive);
                     smr.enabled = snap.OriginalEnabled;
-                    smr.sharedMesh = snap.OriginalMesh;
+                    // memory feedback_native_smr_registry_invariant: Registry が native の単一権威 (Phase 6 完了)。
+                    // Registry が fake-null/未登録の場合は null 代入で SMR 非描画になる (元から null と同等の意図動作)。
+                    smr.sharedMesh = Internal.NativeSmrRegistry.TryGet(smr);
                     if (snap.OriginalBones != null) smr.bones = snap.OriginalBones;
                     if (snap.OriginalMaterials != null) smr.sharedMaterials = snap.OriginalMaterials;
+                    if (smrKind == "mesh_skin_upper") restoredSkinUpper = true;
                 }
             }
             SmrSnapshotStore.Remove(SnapshotKind.Bottoms, instanceId, smrKind, isInjected);
         }
+
+        // skin_upper を Babydoll swap していた場合、上記ループが native(stable) に戻している。
+        // apply 時に Babydoll へ rebase していた OriginalSkinUpper を native に戻し、後段の
+        // UnregisterBottoms→RefreshOne が native に rewind するようにする。
+        // 2 段ガード:
+        //   (1) restoredSkinUpper = Bottoms snapshot に mesh_skin_upper があった (= 本 Loader が swap した)。
+        //   (2) Tops override 不在 = skin_upper の Babydoll swap 所有者が Tops でない。
+        //       Bottoms 適用後に runtime で Tops override を足したケースでは Tops が OriginalSkinUpper(Babydoll)
+        //       を所有するため、ここで native に上書きしない (apply 側 gate と対称)。
+        if (restoredSkinUpper)
+        {
+            var charId = Internal.CharacterResolver.ResolveHandle(character)?.GetCharID() ?? CharID.NUM;
+            if (charId < CharID.NUM && !TopsOverrideStore.TryGet(charId, out _))
+            {
+                var su = renderers.FirstOrDefault(m => m != null && m.name == "mesh_skin_upper");
+                if (su != null && su.sharedMesh != null)
+                    SkinShrinkCoordinator.RebaseOriginalSkinUpper(character, su.sharedMesh);
+            }
+        }
+
+        // BreastFlatten clone を Destroy しておかないと、UnregisterBottoms → OriginalSkinUpper 再捕獲が
+        // flatten clone を「素」として焼き込んでしまう (Tops 側 RestoreFor と同方針)。
+        BreastFlattenApplier.RestoreFor(character);
 
         // BottomsSkinShrink で書き換えた mesh_skin_lower / mesh_skin_upper を SkinShrinkCoordinator に
         // 通知する。Coordinator が contribution を削除し、Tops も無ければ素 mesh に戻す。Tops 残存なら

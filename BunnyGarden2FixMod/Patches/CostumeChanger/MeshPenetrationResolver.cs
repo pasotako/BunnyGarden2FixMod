@@ -19,11 +19,24 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 ///     不足 (0 &lt;= signedD &lt; skinPushAmount) → 不足分のみ
 ///     既に十分内側 (signedD &gt;= skinPushAmount) → 何もしない（外へ引き戻さない）
 ///
+/// scatter mode (useScatterPush=true。SkinShrink / BreastFlatten。donor=任意 cloth) でも
+/// 符号定義・必要押し込み量は pass 2 と同義: cloth 表面基準で「めり込み解消 (|signedD|) ＋
+/// skinPushAmount マージン」を押す。push 量の cap は scaledPush ではなく近傍 cloth 中の最大
+/// pushNeeded を上限とするため、skinPushAmount が小さくてもめり込みは常にフル解消される
+/// (gather と同じ無制限解消。詳細は scatter ブロックの cap 付近コメント参照)。
+///
 /// 旧 MeshSurfaceOffsetAdjuster + MeshSurfaceShrinker を統合した上位互換。
 /// 検出を 1 回しか走らせないため一様 shrink より高速かつ局所的に作用する。
 /// </summary>
 internal static class MeshPenetrationResolver
 {
+    /// <summary>
+    /// lateral gate (<c>donorMaxLateralDist</c>) の fade tail 幅 = gate 距離 × この倍率。
+    /// 1.0 で gate 距離と同幅の tail (例: gate 1cm → fade 帯 [1cm, 2cm])。binary cut の
+    /// 段差を除去する目的。固定値 (config 化しない)。0 にすると従来の hard cut に縮退する。
+    /// </summary>
+    private const float LateralGateFadeBandMul = 1.0f;
+
     /// <summary>
     /// donor と reference を 1 パスで処理し、食い込みを解消した両 mesh を返す。
     /// 入力 mesh は in-place 変更しない（戻り値で新規 Mesh を返す）。
@@ -39,6 +52,9 @@ internal static class MeshPenetrationResolver
     /// <param name="useScatterPush">true で skin push を「scatter from cloth」モードに切替。
     /// 各 cloth 頂点で pushNeeded を計算 → kernel 重み付き平均 displacement を skin に再分配。
     /// waist 縫い目等で隣接 skin SMR 境界の push 量を連続化する目的。kernel: w = (1 - dsq/R²)、R = clothSampleRadius (>0 必須)。</param>
+    /// <param name="donorMaxLateralDist">pass 1 (stocking push) で、donor 頂点から近傍 skin 表面推定点までの
+    /// 接線方向 (lateral) 距離がこの値を超えたら push しない (skin が法線方向＝真下に無い箇所を弾く)。
+    /// &lt;= 0 で無効 (距離ゲート無し、既存挙動)。pass 2 には無関係。</param>
     /// <returns>(adjusted donor, adjusted skin)。null なら no-op。</returns>
     internal static (Mesh donor, Mesh skin) Resolve(
         Mesh donorMesh, Mesh referenceMesh, string referenceShape,
@@ -47,7 +63,8 @@ internal static class MeshPenetrationResolver
         string logTag,
         bool useSkinNormalForPush = false,
         float clothSampleRadius = 0f,
-        bool useScatterPush = false)
+        bool useScatterPush = false,
+        float donorMaxLateralDist = 0f)
     {
         if (donorMesh == null || referenceMesh == null) return (null, null);
         if (minOffset <= 0f && skinPushAmount <= 0f) return (null, null);
@@ -159,12 +176,19 @@ internal static class MeshPenetrationResolver
         var neighbors = new System.Collections.Generic.List<int>(16);
 
         // ------- pass 1: stocking push (donor 頂点 → 近傍 skin の重み付け平均) -------
-        int pushed = 0, skippedInverted = 0, stockingFallback = 0;
+        int pushed = 0, skippedInverted = 0, stockingFallback = 0, skinAbsent = 0;
         float maxStockingPush = 0f;
         long stockingMs = 0;
         if (minOffset > 0f)
         {
             long pStart = sw.ElapsedMilliseconds;
+            // lateral gate の fade tail パラメータ (donorMaxLateralDist>0 時のみ意味を持つ)。
+            // inner = gate 距離 (ここまで full push)、outer = inner + fade 幅 (ここで push 0)。
+            float lateralGateInner = donorMaxLateralDist;
+            float lateralGateFade = donorMaxLateralDist * LateralGateFadeBandMul;
+            float lateralGateOuter = lateralGateInner + lateralGateFade;
+            float lateralGateInnerSq = lateralGateInner * lateralGateInner;
+            float lateralGateOuterSq = lateralGateOuter * lateralGateOuter;
             for (int i = 0; i < donorVerts.Length; i++)
             {
                 var v = donorVerts[i];
@@ -197,8 +221,27 @@ internal static class MeshPenetrationResolver
                 //   signedD > 0 → stocking が skin 表面の +snAvg 側 = 外側にいる（通常）
                 //   signedD = 0 → stocking がちょうど skin 表面上
                 //   signedD < 0 → stocking が skin に食い込んでいる
-                float signedD = Vector3.Dot(v - sAvg, snAvg);
+                Vector3 toV = v - sAvg;
+                float signedD = Vector3.Dot(toV, snAvg);
                 if (signedD < invertGuard) { skippedInverted++; continue; }
+
+                // lateral (接線方向) 距離ゲート: 最近傍 skin 表面推定点から横に離れている
+                // = 頂点の法線方向 (真下) に skin が無い箇所で push を減衰させる。<=0 で無効 (既存挙動)。
+                // gate 距離以内は full push (lateralScale=1 で従来挙動と完全一致 = push 減少なし)。
+                // fade tail [gate, gate×(1+LateralGateFadeBandMul)] で lateralScale を 1→0 に線形減衰し、
+                // tail を超えたら従来どおり skip。これにより旧 binary cut の push 段差を除去する。
+                // tail は penetration 頂点 (後段 pushDist>0) のみに加算的に作用するため自己限定。
+                float lateralScale = 1f;
+                if (donorMaxLateralDist > 0f)
+                {
+                    float lateralSq = toV.sqrMagnitude - signedD * signedD;   // float 誤差で僅かに負になりうるが無害
+                    if (lateralSq > lateralGateOuterSq) { skinAbsent++; continue; }
+                    if (lateralSq > lateralGateInnerSq)
+                    {
+                        float lateral = Mathf.Sqrt(Mathf.Max(0f, lateralSq));
+                        lateralScale = Mathf.Clamp01((lateralGateOuter - lateral) / lateralGateFade);
+                    }
+                }
 
                 // まず stocking を skin 表面 (sAvg) まで揃え、そこから更に minOffset
                 // だけ外側 (+snAvg 方向) に押し出す。
@@ -210,8 +253,10 @@ internal static class MeshPenetrationResolver
                 float pushDist = minOffset - signedD;
                 if (pushDist > 0f)
                 {
-                    donorDisp[i] = snAvg * pushDist;
-                    if (pushDist > maxStockingPush) maxStockingPush = pushDist;
+                    // lateral fade tail 内は push 量を lateralScale 倍 (gate 以内は scale=1 で不変)。
+                    float applied = pushDist * lateralScale;
+                    donorDisp[i] = snAvg * applied;
+                    if (applied > maxStockingPush) maxStockingPush = applied;
                     pushed++;
                 }
             }
@@ -294,6 +339,8 @@ internal static class MeshPenetrationResolver
                 Vector3 dispSum = Vector3.zero;
                 float wSum = 0f;
                 int contribs = 0;
+                // 有効寄与 (pushNeeded>0) の最大値。後段 cap の基準に使う。
+                float maxPushNeeded = 0f;
 
                 for (int k = 0; k < neighbors.Count; k++)
                 {
@@ -331,6 +378,7 @@ internal static class MeshPenetrationResolver
                     dispSum += -pushAxis * (pushNeeded * w);
                     wSum += w;
                     contribs++;
+                    if (pushNeeded > maxPushNeeded) maxPushNeeded = pushNeeded;
                 }
 
                 if (wSum <= 0f || contribs == 0) continue;
@@ -338,11 +386,19 @@ internal static class MeshPenetrationResolver
                 Vector3 disp = dispSum / wSum;
                 float dispMag = disp.magnitude;
                 if (dispMag <= 0f) continue;
-                // dispMag は kernel 平均で scaledPush を超えないが、丸め誤差で僅かに超えうるので cap。
-                if (dispMag > scaledPush)
+                // |disp| ≤ (寄与 pushNeeded の重み付き平均) ≤ maxPushNeeded が三角不等式で常に成立。
+                // よって cap は overshoot LIMITER の役割のみを担い、めり込み解消分 (pushNeeded に
+                // 含まれる |signedD|) を頭打ちにしない。これにより skinPushAmount は純粋な「追加
+                // マージン」となり、小さい値でも cloth 表面までのめり込みは常にフル解消される
+                // (gather mode と挙動一致)。
+                // 補足: scatter は現状 useSkinNormalForPush:true でのみ使用 (push 軸が skin vertex
+                // 単位で定数 refNormals[i]) → |disp| = 重み付き平均 pushNeeded となり cap 発火は実質
+                // 丸め誤差のみ。将来 useScatterPush:true + useSkinNormalForPush:false の組合せを足すと、
+                // 軸変動により幾何的クリップが稀に起こりうる (その場合も上限は maxPushNeeded で安全側)。
+                if (dispMag > maxPushNeeded)
                 {
-                    disp *= scaledPush / dispMag;
-                    dispMag = scaledPush;
+                    disp *= maxPushNeeded / dispMag;
+                    dispMag = maxPushNeeded;
                 }
                 skinDisp[i] = disp;
                 skinHits++;
@@ -524,7 +580,7 @@ internal static class MeshPenetrationResolver
         float bandMean2 = bandCount[2] > 0 ? bandSum[2] / bandCount[2] : 0f;
         PatchLogger.LogDebug(
             $"[{logTag}] penetration resolve: donor={donorMesh.name}({donorVerts.Length}v) ref={referenceMesh.name}({refVerts.Length}v) " +
-            $"stockingPushed={pushed} skippedInv={skippedInverted} fallback={stockingFallback} stockingMax={maxStockingPush:F4}m " +
+            $"stockingPushed={pushed} skippedInv={skippedInverted} skinAbsent={skinAbsent} fallback={stockingFallback} stockingMax={maxStockingPush:F4}m " +
             $"skinPushed={skinHits} skinSkippedInv={skinSkippedInverted} skinFallback={skinFallback} skinOutOfRange={skinOutOfRange} skinMax={maxSkinPush:F4}m " +
             $"skinBand[B/M/F]: n={bandCount[0]}/{bandCount[1]}/{bandCount[2]} " +
             $"max=({bandMax[0]:F4}/{bandMax[1]:F4}/{bandMax[2]:F4})m " +

@@ -80,7 +80,7 @@ public class CostumePickerController : MonoBehaviour
     /// <summary>ゲーム側入力（GBInput）をパッチで抑制すべき状態かを返す。</summary>
     public static bool ShouldSuppressGameInput()
     {
-        if (Configs.CostumeChangerEnabled?.Value != true) return false;
+        if (!Configs.CostumeChangerEnabled.Value) return false;
         // ConfirmDialog 表示中は抑制解除（ダイアログが GBInput を読むため）
         if (ConfirmDialogHelper.IsActive()) return false;
         var ctrl = Instance;
@@ -117,10 +117,10 @@ public class CostumePickerController : MonoBehaviour
 
         // F9 設定パネル等から Stocking 系 Config が変更された場合、picker open 中なら即時メッシュ反映する。
         // ShapeFalloff は blendShape 全 frame の再構築を伴って重いので Update() でデバウンスする。
-        if (Configs.StockingOffset != null) Configs.StockingOffset.SettingChanged += OnStockingTuneChanged;
-        if (Configs.StockingSkinShrink != null) Configs.StockingSkinShrink.SettingChanged += OnStockingTuneChanged;
-        if (Configs.StockingSkinFalloffRadius != null) Configs.StockingSkinFalloffRadius.SettingChanged += OnStockingTuneChanged;
-        if (Configs.StockingShapeFalloffRadius != null) Configs.StockingShapeFalloffRadius.SettingChanged += OnStockingShapeFalloffChanged;
+        Configs.StockingOffset.SettingChanged += OnStockingTuneChanged;
+        Configs.StockingSkinShrink.SettingChanged += OnStockingTuneChanged;
+        Configs.StockingSkinFalloffRadius.SettingChanged += OnStockingTuneChanged;
+        Configs.StockingShapeFalloffRadius.SettingChanged += OnStockingShapeFalloffChanged;
         // Tops 距離保存の閾値変更は TopsLoader 側で全 target に適用するため、ここでは購読しない。
     }
 
@@ -137,10 +137,10 @@ public class CostumePickerController : MonoBehaviour
             m_view.OnResetAllClicked -= HandleResetAllClicked;
             m_view.OnUnlockAllClicked -= HandleUnlockAllClicked;
         }
-        if (Configs.StockingOffset != null) Configs.StockingOffset.SettingChanged -= OnStockingTuneChanged;
-        if (Configs.StockingSkinShrink != null) Configs.StockingSkinShrink.SettingChanged -= OnStockingTuneChanged;
-        if (Configs.StockingSkinFalloffRadius != null) Configs.StockingSkinFalloffRadius.SettingChanged -= OnStockingTuneChanged;
-        if (Configs.StockingShapeFalloffRadius != null) Configs.StockingShapeFalloffRadius.SettingChanged -= OnStockingShapeFalloffChanged;
+        Configs.StockingOffset.SettingChanged -= OnStockingTuneChanged;
+        Configs.StockingSkinShrink.SettingChanged -= OnStockingTuneChanged;
+        Configs.StockingSkinFalloffRadius.SettingChanged -= OnStockingTuneChanged;
+        Configs.StockingShapeFalloffRadius.SettingChanged -= OnStockingShapeFalloffChanged;
         if (Instance == this) Instance = null;
     }
 
@@ -219,7 +219,6 @@ public class CostumePickerController : MonoBehaviour
             ReapplyStockingForTune();
         }
 
-        if (Configs.CostumeChangerEnabled == null) return;
         if (!Configs.CostumeChangerEnabled.Value) return;
         // Awake で AddComponent<CostumePickerView>() が何らかの理由（例外）で失敗したケース防御。
         // m_view.IsShown などを触る前段で早期 return する。
@@ -938,13 +937,12 @@ public class CostumePickerController : MonoBehaviour
                 if (BottomsOverrideStore.TryGet(m_activeChar, out var curB)
                     && curB.DonorChar == bItem.Donor && curB.DonorCostume == bItem.Costume)
                 {
-                    // トグル解除: store クリア + target SMR をスナップショットから素状態に復元。
-                    // env.LoadCharacter は同 costume だと no-op で setup() Postfix が発火しないため
-                    // 直接 Restore する。
+                    // トグル解除: store クリア + 全 garment を reset して store 状態から canonical 再適用。
+                    // env.LoadCharacter は同 costume だと no-op で setup() Postfix が発火しないため reload せず
+                    // ReflectToggleOff で直接反映する。Store.Clear を必ず先に呼ぶ (skin_upper 所有権の収束が依存)。
+                    // 残存 override の cloth flatten / skin_upper swap / HoleScene companion を順序非依存で揃える。
                     BottomsOverrideStore.Clear(m_activeChar);
-                    var envR = GBSystem.Instance?.GetActiveEnvScene();
-                    var charObjR = envR?.FindCharacter(m_activeChar);
-                    if (charObjR != null) BottomsLoader.RestoreFor(charObjR);
+                    CostumeReflectionCoordinator.ReflectToggleOff(m_activeChar);
                     m_view.Render(BuildRenderData());
                     return;
                 }
@@ -959,13 +957,13 @@ public class CostumePickerController : MonoBehaviour
                 if (TopsOverrideStore.TryGet(m_activeChar, out var curTops)
                     && curTops.DonorChar == tItem.Donor && curTops.DonorCostume == tItem.Costume)
                 {
-                    // トグル解除: store クリア + target SMR をスナップショットから素状態に復元。
-                    // env.LoadCharacter は同 costume だと no-op で setup() Postfix が発火しないため
-                    // 直接 Restore する（Bottoms と同方針）。
+                    // トグル解除: store クリア + 全 garment を reset して store 状態から canonical 再適用
+                    // (Bottoms と同方針)。env.LoadCharacter は同 costume だと no-op で setup() Postfix が
+                    // 発火しないため reload せず ReflectToggleOff で直接反映する。Store.Clear を必ず先に呼ぶ。
+                    // これにより SwimWear+flatten+Bottoms 残存時の swimsuit cloth 膨らみ戻り (Tops 解除で
+                    // cloth flatten が再適用されない bug) と skin_upper 所有権戻りを順序非依存で解消する。
                     TopsOverrideStore.Clear(m_activeChar);
-                    var envR = GBSystem.Instance?.GetActiveEnvScene();
-                    var charObjR = envR?.FindCharacter(m_activeChar);
-                    if (charObjR != null) TopsLoader.RestoreFor(charObjR);
+                    CostumeReflectionCoordinator.ReflectToggleOff(m_activeChar);
                     m_view.Render(BuildRenderData());
                     return;
                 }

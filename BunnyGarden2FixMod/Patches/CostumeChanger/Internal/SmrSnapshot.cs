@@ -8,6 +8,7 @@ internal enum SnapshotKind
 {
     Tops,
     Bottoms,
+    BreastFlatten,
 }
 
 /// <summary>
@@ -21,9 +22,7 @@ internal struct SmrSnapshot
     public GameObject InjectedGo;     // WasInjected 用
     public bool OriginalActive;
     public bool OriginalEnabled;      // Renderer.enabled (描画 ON/OFF)
-    // OriginalMesh は addressables 所有のため Destroy されず、参照保持のみで安全に Restore できる
-    // （SwimWearStockingPatch / KneeSocksLoader と同方針）。
-    public Mesh OriginalMesh;
+    // sharedMesh の native は NativeSmrRegistry が単一権威 (memory feedback_native_smr_registry_invariant)。
     public Transform[] OriginalBones;
     public Material[] OriginalMaterials;
 }
@@ -80,7 +79,8 @@ internal static class SmrSnapshotStore
             // のため activeSelf を使う（activeInHierarchy ガードを入れると初回ロードで全 skip）。
             snap.OriginalActive = smr.gameObject.activeSelf;
             snap.OriginalEnabled = smr.enabled;
-            snap.OriginalMesh = smr.sharedMesh;
+            // sharedMesh の native は NativeSmrRegistry が単一権威 (memory feedback_native_smr_registry_invariant)。
+            // Capture は active/enabled/bones/materials のみ。
             // bones / sharedMaterials は defensive copy（target.bones = donor.bones で上書きされるため
             // 元配列インスタンスがそのまま残らないと restore で donor の値を戻すことになる）
             snap.OriginalBones = smr.bones != null ? (Transform[])smr.bones.Clone() : null;

@@ -23,6 +23,8 @@ public enum UIKind
 public class UIEntryMeta
 {
     public string Category;
+    /// <summary>セクション内のサブグループ名（折りたたみ単位）。null/空 = 未グループ。YAML の `group` 由来。</summary>
+    public string Group;
     public string Label;
     public string Desc;          // 任意。v2 以降で使用予定。Phase 2 では null 可。
     public UIKind Kind;

@@ -23,8 +23,11 @@ public class SettingsView : MonoBehaviour
     private PanelSettings m_settings;
     private VisualElement m_root;
     private VisualElement m_sidebar;
-    private VisualElement m_content;
+    private ScrollView m_content;
     private Font m_font;
+
+    /// <summary>パネル固定高さ (panel px, PanelSettings.scale で拡縮)。内容がこれを超えると content が縦スクロールする。</summary>
+    private const float kPanelHeight = 480f;
 
     private List<string> m_categories;
     private int m_selectedCategoryIndex = 0;
@@ -88,6 +91,7 @@ public class SettingsView : MonoBehaviour
         m_root.style.right = 16;
         m_root.style.top = 20;
         m_root.style.width = 460;
+        m_root.style.height = kPanelHeight; // ウィンドウサイズ固定。超過分は content の ScrollView でスクロール
         m_root.style.backgroundColor = new Color(0.118f, 0.133f, 0.188f, 1f); // #1e2230
         m_root.style.borderTopWidth = 1;
         m_root.style.borderRightWidth = 1;
@@ -111,6 +115,10 @@ public class SettingsView : MonoBehaviour
         header.style.paddingRight = 12;
         header.style.paddingTop = 8;
         header.style.paddingBottom = 8;
+        // 固定ヘッダー: 縮小させない。body 側の contentContainer が flex-shrink:0 で自然高を保つと
+        // body の自然高が固定高 m_root を超え、既定 flex-shrink=1 のままだと header も比率圧縮されて
+        // テキスト上部が見切れる。header を flex-shrink:0 で保護し、超過分は body のみに吸収させる。
+        header.style.flexShrink = 0;
 
         var title = new Label("FixMod 設定");
         title.style.color = new Color(0.84f, 0.87f, 0.91f, 1f);
@@ -131,8 +139,21 @@ public class SettingsView : MonoBehaviour
         m_root.Add(header);
 
         // ── 本体 (sidebar + content) ─────────
+        // 固定高 m_root の残り（header 下）を body が埋め、その中で content (ScrollView) が縦スクロールする。
         var body = new VisualElement();
         body.style.flexDirection = FlexDirection.Row;
+        body.style.flexGrow = 1;
+        body.style.minHeight = 0; // 子 ScrollView がはみ出さず内部スクロールへ回るように 0 を許可
+        // themeStyleSheet が null の環境では ScrollView 内部の既定 overflow:hidden USS が効かず、
+        // スクロール内容が panel 外へ描画される。クリップは 2 段で行う:
+        //   (1) 外側 wrapper である body（ここ。panel 矩形外への漏れを止める最終クリップ）
+        //   (2) ScrollView 内部の contentViewport（後述 m_content 生成箇所）
+        // ScrollView 要素 (m_content) 自身には overflow を付けない: 内部レイアウトが干渉して
+        // contentContainer が viewport 高に拘束され、group 内 row やリセットボタンが flex-shrink で
+        // 圧縮されスクロールが効かなくなるため。内部の contentViewport には付けてよい（別要素）。
+        // m_root には掛けない: m_tooltipLabel が m_root 直下で row 下端付近に絶対配置されるため、
+        // m_root をクリップすると最下段 row の tooltip が切れる。
+        body.style.overflow = Overflow.Hidden;
         m_root.Add(body);
 
         m_sidebar = new VisualElement();
@@ -142,12 +163,30 @@ public class SettingsView : MonoBehaviour
         m_sidebar.style.paddingBottom = 6;
         body.Add(m_sidebar);
 
-        m_content = new VisualElement();
+        m_content = new ScrollView(ScrollViewMode.Vertical);
         m_content.style.flexGrow = 1;
-        m_content.style.paddingTop = 8;
-        m_content.style.paddingBottom = 8;
-        m_content.style.paddingLeft = 12;
-        m_content.style.paddingRight = 12;
+        m_content.style.minHeight = 0;
+        // 矩形外漏れのクリップは ScrollView 本体ではなく親 body に掛ける（上記 body のコメント参照）。
+        // ここで m_content 自身に overflow を付けると contentContainer が圧縮されスクロールが壊れる。
+        m_content.verticalScrollerVisibility = ScrollerVisibility.Auto;
+        m_content.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+        // themeStyleSheet が null の環境では OnScrollWheel が ReadSingleLineHeight() で
+        // NullReferenceException を投げるため mouseWheelScrollSize を明示する（UITListView と同じ回避策）。
+        m_content.mouseWheelScrollSize = 30f;
+        // themeStyleSheet が null だと ScrollView 内部の既定 USS（viewport の flex-grow/overflow、
+        // contentContainer の flex-shrink）が適用されず、contentContainer が viewport 高に拘束されて
+        // 子（group 行・リセットボタン）が flex-shrink で潰れ、超過分がスクロールしない。
+        // 不足分を手動配線する:
+        //   - viewport を ScrollView いっぱいに広げ overflow:Hidden でクリップ
+        //   - contentContainer は flex-shrink:0 で自然高を保ち、超過分を scroller に回す
+        m_content.contentViewport.style.flexGrow = 1;
+        m_content.contentViewport.style.overflow = Overflow.Hidden;
+        m_content.contentContainer.style.flexShrink = 0;
+        // padding は viewport ではなく contentContainer 側に置いて従来の見た目を維持する。
+        m_content.contentContainer.style.paddingTop = 8;
+        m_content.contentContainer.style.paddingBottom = 8;
+        m_content.contentContainer.style.paddingLeft = 12;
+        m_content.contentContainer.style.paddingRight = 12;
         body.Add(m_content);
 
         // ↑↓←→ Tab Esc Space Enter は SettingsController が InputSystem 経由で処理するので、
@@ -354,6 +393,8 @@ public class SettingsView : MonoBehaviour
         }
         m_content.Clear();
         m_currentRows.Clear();
+        // カテゴリ切替・再描画ごとにスクロール位置を先頭へ戻す（前カテゴリの scrollOffset 残留を防ぐ）。
+        m_content.scrollOffset = Vector2.zero;
         // カテゴリ切替時に残留 tooltip を非表示にする
         HideTooltip();
 
@@ -362,17 +403,52 @@ public class SettingsView : MonoBehaviour
 
         // ── 行 ──────────────────────────────────────
         // YAML 宣言順 (= UIEntries の配列順) がそのままカテゴリ内表示順になる。
+        // group が指定された連続ランは折りたためるグループにまとめる。group 未指定行は従来どおりフラット。
         var entries = Configs.UIEntries
             .Where(e => e.Category == category)
             .ToList();
 
-        for (int i = 0; i < entries.Count; i++)
+        int idx = 0;
+        while (idx < entries.Count)
         {
-            var entry = entries[i];
-            var handle = BuildRow(entry);
-            m_content.Add(handle.Row);
-            m_currentRows.Add(handle);
+            var group = entries[idx].Group;
+            if (string.IsNullOrEmpty(group))
+            {
+                var handle = BuildRow(entries[idx]);
+                m_content.Add(handle.Row);
+                m_currentRows.Add(handle);
+                idx++;
+                continue;
+            }
+
+            // 同一 group の連続ランを収集する。
+            int runStart = idx;
+            while (idx < entries.Count && entries[idx].Group == group) idx++;
+
+            bool collapsed = SettingsCollapseState.IsCollapsed(category, group);
+            m_content.Add(BuildGroupHeader(category, group, collapsed));
+
+            if (!collapsed)
+            {
+                var container = new VisualElement();
+                container.style.marginLeft = 8; // グループ内をインデント
+                for (int j = runStart; j < idx; j++)
+                {
+                    var handle = BuildRow(entries[j]);
+                    container.Add(handle.Row);
+                    m_currentRows.Add(handle);
+                }
+                m_content.Add(container);
+            }
         }
+
+        // 折りたたみで行数が減った場合に選択 index がはみ出さないようクランプする。
+        // 注: マウスでヘッダーを折りたたんだ際の選択行追従は行わない（キーボード移動のスキップのみ要件）。
+        //     畳んだ結果 index がずれてハイライトが別行に移ることは許容する。
+        m_selectedRowIndex = (m_currentRows.Count == 0)
+            ? 0
+            : Mathf.Clamp(m_selectedRowIndex, 0, m_currentRows.Count - 1);
+
         ApplyRowHighlight();
 
         // ── ページ下部にリセットボタン ──────────────
@@ -551,11 +627,58 @@ public class SettingsView : MonoBehaviour
             sl.Setup(entry.Label, entry.SliderMin, entry.SliderMax, m_font, formatter);
             // SetValue は m_suppressEvents により OnValueChanged を発火させない安全な初期値設定
             sl.SetValue(entry.Accessor.GetFloat());
-            sl.SetStep(entry.SliderStep);
+            // F9 パネルではスライダー上のホイールで値を変えず、ScrollView のスクロールに使う。
+            // SetStep を呼ばない（m_step==0）と UITSlider.OnWheel は StopPropagation せず親へバブルする。
+            // キーボード ←→ の値変更は NudgeSelectedSlider が entry.SliderStep を直接使うため影響しない。
             sl.OnValueChanged += v => entry.Accessor.SetFloat(v);
             row.Add(sl);
             return new RowHandle { Entry = entry, Row = row, Slider = sl };
         }
+    }
+
+    /// <summary>折りたたみグループのヘッダー行を生成する。クリックで開閉をトグルし RenderContent で再描画する。</summary>
+    private VisualElement BuildGroupHeader(string section, string group, bool collapsed)
+    {
+        var header = new VisualElement();
+        header.focusable = false; // マウス専用。キーボードナビ(↑↓/Space)対象外（m_currentRows にも積まない）。
+        header.style.flexDirection = FlexDirection.Row;
+        header.style.alignItems = Align.Center;
+        header.style.minHeight = 24;
+        header.style.marginTop = 4;
+        header.style.marginBottom = 2;
+        header.style.paddingLeft = 6;
+        header.style.paddingRight = 8;
+        header.style.backgroundColor = new Color(0.094f, 0.110f, 0.153f, 1f); // #181c27 (sidebar と同色)
+        header.style.borderTopLeftRadius = 3;
+        header.style.borderTopRightRadius = 3;
+        header.style.borderBottomLeftRadius = 3;
+        header.style.borderBottomRightRadius = 3;
+
+        var arrow = new Label(collapsed ? "▶" : "▼");
+        arrow.style.color = new Color(0.6f, 0.65f, 0.75f, 1f);
+        arrow.style.fontSize = 10;
+        arrow.style.width = 12;
+        arrow.style.marginRight = 6;
+        if (m_font != null) arrow.style.unityFont = m_font;
+        header.Add(arrow);
+
+        var name = new Label(group);
+        name.style.color = new Color(0.84f, 0.87f, 0.91f, 1f);
+        name.style.fontSize = 11;
+        name.style.flexGrow = 1;
+        name.style.whiteSpace = WhiteSpace.NoWrap;
+        name.style.overflow = Overflow.Hidden;
+        if (m_font != null) name.style.unityFont = m_font;
+        header.Add(name);
+
+        header.RegisterCallback<ClickEvent>(_ =>
+        {
+            // 状態の単一ソース化: ヘッダー生成時の collapsed クロージャ値ではなく現在値を再読して反転する。
+            SettingsCollapseState.SetCollapsed(section, group, !SettingsCollapseState.IsCollapsed(section, group));
+            RenderContent();
+        });
+
+        return header;
     }
 
     private void ApplyRowHighlight()
@@ -574,7 +697,8 @@ public class SettingsView : MonoBehaviour
         if (m_root == null) return;
         // PanelSettings.scale は Awake 時の値を保持するため、開く度に Configs.UIScale を反映する。
         if (m_settings != null) m_settings.scale = Configs.UIScale.Value;
-        // spec §515: 毎回先頭カテゴリから開始。開閉状態も都度リセット。
+        // 毎回先頭カテゴリ・先頭行から開始する。
+        // 注: グループ折りたたみ状態は SettingsCollapseState でディスク永続化され、ここではリセットしない。
         m_selectedCategoryIndex = 0;
         m_selectedRowIndex = 0;
         ApplySidebarHighlight();
@@ -617,12 +741,24 @@ public class SettingsView : MonoBehaviour
     {
         m_selectedRowIndex = Mathf.Max(0, m_selectedRowIndex - 1);
         ApplyRowHighlight();
+        ScrollSelectedRowIntoView();
     }
 
     public void HandleKeyArrowDown()
     {
-        m_selectedRowIndex = Mathf.Min(m_currentRows.Count - 1, m_selectedRowIndex + 1);
+        // Count==0（全折りたたみ）でも -1 に落ちないよう Max(0, …) で下限を固定する。
+        m_selectedRowIndex = Mathf.Max(0, Mathf.Min(m_currentRows.Count - 1, m_selectedRowIndex + 1));
         ApplyRowHighlight();
+        ScrollSelectedRowIntoView();
+    }
+
+    /// <summary>固定高 ScrollView 化に伴い、↑↓ で viewport 外へ移動した選択行を可視域へスクロールする。</summary>
+    private void ScrollSelectedRowIntoView()
+    {
+        if (m_content == null) return;
+        if (m_selectedRowIndex < 0 || m_selectedRowIndex >= m_currentRows.Count) return;
+        var row = m_currentRows[m_selectedRowIndex].Row;
+        if (row != null) m_content.ScrollTo(row);
     }
 
     public void HandleKeyArrowLeft(bool shift)

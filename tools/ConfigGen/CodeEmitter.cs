@@ -138,6 +138,8 @@ public static class CodeEmitter
         sb.AppendLine($"            Category = {categoryLit},");
         sb.AppendLine($"            Label    = {labelLit},");
         sb.AppendLine($"            Desc     = {descLit},");
+        if (!string.IsNullOrEmpty(e.Group))
+            sb.AppendLine($"            Group    = {ToCSharpStringLiteral(e.Group)},");
 
         if (e.Ui!.Kind == "toggle")
         {

@@ -22,6 +22,8 @@ public class ConfigEntryDef
     [YamlIgnore]
     public string Section { get; set; } = "";
     public string Label { get; set; } = "";
+    /// <summary>F9 パネルでセクション内をまとめる折りたたみグループ名。省略時は未グループ。</summary>
+    public string? Group { get; set; }
     public string? Key { get; set; }
     public string Type { get; set; } = "";
     public string? EnumType { get; set; }

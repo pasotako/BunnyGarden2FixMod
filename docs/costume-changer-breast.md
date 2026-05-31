@@ -147,4 +147,4 @@ native か移植かの判定は `SetupPatch`（Tops override の有無で分岐�
 
 ## 既知の制約
 
-`amount > 0.5` + VIP シーン + Tops 移植 + collider 衝突モーションが重なると、上着が動いている skin に追従しきれず突き抜けて見える現象が残る（内部資料 `docs/costume-changer-pitfalls.md` #20。weight shift で緩和したが完全解消は未確定）。config 上限自体は 2026-05-27 に 1.0 へ拡張済みだが、この現象を避けるため VIP + Tops 移植時は `amount ≤ 0.5` を推奨。中期の対策案 = proxy SMR を runtime `BakeMesh` 化（別 plan 予定）。
+VIP シーン + Tops 移植 + collider 衝突モーションが重なると、上着が動いている skin に追従しきれず突き抜けて見える現象が残る（内部資料 `docs/costume-changer-pitfalls.md` #20）。ただし `BreastWeightShift`（flat 揺れ抑制倍率, 既定 0.8）を **0.8 以上**に保てば、潰した胸の揺れが Spine3 へ逃げて発生しない（実機確認 2026-05-31）。`BreastWeightShift` を 0.8 未満へ下げたときのみ顕在化するため、amount 上限（2026-05-27 に 1.0 へ拡張済み）は本現象のトリガではない。中期の根治案 = proxy SMR を runtime `BakeMesh` 化（別 plan 予定）。

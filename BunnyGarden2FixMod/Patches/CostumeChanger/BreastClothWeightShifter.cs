@@ -67,9 +67,7 @@ internal static class BreastClothWeightShifter
 
     /// <summary>
     /// Plugin.Awake から呼ぶ。冪等: 二重呼出は no-op。
-    /// config 変更の live tune は <see cref="CostumeReflectionCoordinator"/> が一元処理する
-    /// (旧 OnConfigChanged/OnGlobalParamChanged は撤去)。本クラスは ApplyFor / RestoreFor /
-    /// RefreshCharAllScenes (skin donor preload 完了経路) の実装のみ提供する。
+    /// config 変更の live tune は <see cref="CostumeReflectionCoordinator"/> が一元処理する。
     /// </summary>
     public static void Initialize(GameObject parent)
     {
@@ -103,10 +101,8 @@ internal static class BreastClothWeightShifter
         {
             s_skinDonorPreloadInFlight.Remove(charId);
         }
-        // preload 完了で Babydoll donor が ready。当該 CharID の live character (env + HoleScene) すべてに
-        // 再適用する。起動元 1 体に限定すると、同 CharID 2 体（同伴: env 側 + HoleScene preserved）の片方が
-        // fallback flatten に取り残されるため CharID 単位で全 scene を走査する（in-flight guard は CharID 単位で
-        // 二重 preload を防ぐが、完了反映は起動元に偏ってはならない）。
+        // 起動元 1 体に限定すると、同 CharID 2 体（同伴: env 側 + HoleScene preserved）の片方が
+        // fallback flatten に取り残されるため CharID 単位で全 scene を走査する。
         // pure-native は ReapplyForCharId→Refresh が cloth→push→flatten を一括 orchestrate するため
         // RefreshCharAllScenes は不要（呼ぶと cloth を二重 refresh する）。Tops/Bottoms char は flatten のみ
         // ReapplyForCharId で再適用し、cloth は RefreshCharAllScenes で別途 refresh する。
@@ -157,11 +153,8 @@ internal static class BreastClothWeightShifter
             if (!TopsLoader.IsTopsCandidate(smr)) continue;
             // per-SMR flatten 判定:
             //  - 距離保存済 cloth(injected donor) は二重収縮回避で flatten しない。
-            //  - non-readable cloth は頂点を読めず flatten 無音失敗するので weight-shift only に落とす。
-            // 注: isReadable ガードは distancePreservedSmrIds=null の既存呼出元(SetupPatch/Refresh)にも効く。
-            //     readable cloth は従来 (flat=flattenVerts) と完全同等。non-readable cloth は従来
-            //     downstream(空 boneWeights で ApplyToSmr 早期 return)に頼って暗黙 skip していたのを明示 skip に
-            //     ガード化したもの(安全側・pure-native は SetupPatch の HasUnflattenableBreastCloth で既に除外済)。
+            //  - non-readable cloth は頂点を読めず flatten 無音失敗するので weight-shift only に落とす
+            //    (isReadable ガードは distancePreservedSmrIds=null の SetupPatch/Refresh 経路にも効く)。
             bool flat = flattenVerts
                         && (distancePreservedSmrIds == null || !distancePreservedSmrIds.Contains(smr.GetInstanceID()))
                         && smr.sharedMesh != null && smr.sharedMesh.isReadable;
@@ -182,9 +175,7 @@ internal static class BreastClothWeightShifter
     private static bool ApplyToSmr(GameObject character, CharID charId, SkinnedMeshRenderer smr, float amount, bool flattenVerts)
     {
         // memory feedback_native_smr_registry_invariant: sharedMesh を _breastshift clone に
-        // 差し替える前に Registry に native を確定させる。GetOrCapture は initial sharedMesh を
-        // native として登録 (= addressables stable mesh)。後続 cycle (再 Apply) では既登録の
-        // native を返すため、後段の suffix recovery path とは独立に機能する。
+        // 差し替える前に Registry に native (= addressables stable mesh) を確定させる。
         Internal.NativeSmrRegistry.GetOrCapture(character, smr);
         var baseMesh = smr.sharedMesh;
         if (baseMesh == null) return false;
@@ -371,7 +362,7 @@ internal static class BreastClothWeightShifter
         {
             // full-body 衣装 (1 枚 mesh_costume) では skin_lower 域 (腰ラインより下) の衣装頂点へ胸 flatten の
             // 距離保存補正が漏れる。Babydoll lower の max Y を腰ラインに、pv/pbw を base へ Y フェードで引き戻す。
-            // OFF / lower 非 readable / NaN / 長さ不一致 のときは何もしない (= 従来の全域焼き、bit-identical)。
+            // OFF / lower 非 readable / NaN / 長さ不一致 のときは何もしない (= 全域焼き、bit-identical)。
             if (Configs.BreastFlattenLowerFade.Value
                 && donorSkinLower != null && donorSkinLower.sharedMesh != null
                 && donorSkinLower.sharedMesh.isReadable)
@@ -422,12 +413,9 @@ internal static class BreastClothWeightShifter
     private static void RestoreSmr(SkinnedMeshRenderer smr, SmrSnapshot snap)
     {
         if (snap == null) return;
-        // memory feedback_native_smr_registry_invariant: Registry が native の単一権威 (Phase 6 完了)。
-        // snap.BaseMesh field は ApplyToSmr の cache hit 判定 (snap.BaseMesh == baseMesh) で
-        // 引き続き使用するため field 自体は維持し、Restore 経路の fallback 参照のみ廃止。
-        // null ガード非対称性回避 (Tops/Bottoms/BreastFlatten と同形): Registry が fake-null/未登録なら
-        // null 代入で SMR 非描画 (元から null と同等の意図動作)。直後 Destroy(PrevClone) で destroyed Mesh が
-        // sharedMesh に残るのを防ぐ。
+        // memory feedback_native_smr_registry_invariant: Registry が native の単一権威。
+        // Registry が fake-null/未登録なら null 代入で SMR 非描画 (元から null と同等の意図動作)。
+        // 直後 Destroy(PrevClone) で destroyed Mesh が sharedMesh に残るのを防ぐ。
         if (smr != null && smr.sharedMesh == snap.PrevClone)
         {
             smr.sharedMesh = Internal.NativeSmrRegistry.TryGet(smr);

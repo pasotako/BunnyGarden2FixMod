@@ -22,11 +22,7 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 /// scatter mode (useScatterPush=true。SkinShrink / BreastFlatten。donor=任意 cloth) でも
 /// 符号定義・必要押し込み量は pass 2 と同義: cloth 表面基準で「めり込み解消 (|signedD|) ＋
 /// skinPushAmount マージン」を押す。push 量の cap は scaledPush ではなく近傍 cloth 中の最大
-/// pushNeeded を上限とするため、skinPushAmount が小さくてもめり込みは常にフル解消される
-/// (gather と同じ無制限解消。詳細は scatter ブロックの cap 付近コメント参照)。
-///
-/// 旧 MeshSurfaceOffsetAdjuster + MeshSurfaceShrinker を統合した上位互換。
-/// 検出を 1 回しか走らせないため一様 shrink より高速かつ局所的に作用する。
+/// pushNeeded を上限とするため、skinPushAmount が小さくてもめり込みは常にフル解消される。
 /// </summary>
 internal static class MeshPenetrationResolver
 {
@@ -391,10 +387,6 @@ internal static class MeshPenetrationResolver
                 // 含まれる |signedD|) を頭打ちにしない。これにより skinPushAmount は純粋な「追加
                 // マージン」となり、小さい値でも cloth 表面までのめり込みは常にフル解消される
                 // (gather mode と挙動一致)。
-                // 補足: scatter は現状 useSkinNormalForPush:true でのみ使用 (push 軸が skin vertex
-                // 単位で定数 refNormals[i]) → |disp| = 重み付き平均 pushNeeded となり cap 発火は実質
-                // 丸め誤差のみ。将来 useScatterPush:true + useSkinNormalForPush:false の組合せを足すと、
-                // 軸変動により幾何的クリップが稀に起こりうる (その場合も上限は maxPushNeeded で安全側)。
                 if (dispMag > maxPushNeeded)
                 {
                     disp *= maxPushNeeded / dispMag;
@@ -430,7 +422,7 @@ internal static class MeshPenetrationResolver
 
                 Vector3 vAvg, vnAvg;
 
-                // clothSampleRadius > 0: 半径内の全 cloth 頂点を採用 (MeshDistancePreserver.skinSampleRadius と同方針)。
+                // clothSampleRadius > 0: 半径内の全 cloth 頂点を採用。
                 //   半径内に頂点が無ければ K=3 にフォールバック。skin 表面推定の頂点単位ノイズを smoothing。
                 // clothSampleRadius <= 0: K=3 固定 (Stocking 既存挙動)。
                 neighbors.Clear();

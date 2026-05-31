@@ -11,11 +11,8 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 /// <summary>
 /// 衣装系 Config (<c>*BreastFlatten</c> / <c>Tops*</c> / <c>Bottoms*</c> / 共有 smooth) の
 /// <see cref="ConfigEntry{T}.SettingChanged"/> を一元購読し、影響 CharID を per-CharID dirty set に積んで
-/// <see cref="LateUpdate"/> で次フレーム 1 回に coalesce して反映する単一窓口。
-///
-/// 旧来は <see cref="BreastFlattenApplier"/> / <see cref="TopsLoader"/> / <see cref="BottomsLoader"/> /
-/// <see cref="BreastClothWeightShifter"/> の 4 ハンドラに散在し、同一 <c>*BreastFlatten</c> config を 3 クラスが
-/// 購読して購読順依存だった。本クラスがそれらを置換する。
+/// <see cref="LateUpdate"/> で次フレーム 1 回に coalesce して反映する単一窓口。同一 config を複数ハンドラが
+/// 購読する購読順依存を避けるため、購読を本クラスに集約する。
 ///
 /// 反映は <see cref="ReflectChar"/> が canonical 順 (<c>Bottoms.ApplyDirectly → Tops.ApplyDirectly</c>、
 /// pure-native は <see cref="BreastFlattenApplier.Refresh"/>) で実行し、各 Apply 末尾の overlay/cloth 再適用
@@ -133,8 +130,7 @@ internal sealed class CostumeReflectionCoordinator : MonoBehaviour
 
     private static void OnAnyConfigChanged(object sender, EventArgs e)
     {
-        // sender は本クラスが購読した config のみ (= s_configMap に必ず存在) なので解決失敗は到達不能。
-        // map 構築漏れ等の防御として no-op return する。
+        // sender は購読済 config (= s_configMap に存在) のはず。map 構築漏れ等の防御として no-op return する。
         if (sender == null || !s_configMap.TryGetValue(sender, out var desc)) return;
         if (desc.SingleChar.HasValue)
             s_dirtyChars.Add(desc.SingleChar.Value);
@@ -175,16 +171,13 @@ internal sealed class CostumeReflectionCoordinator : MonoBehaviour
                 ReflectChar(holeScene != null ? holeScene.FindCharacter(charId) : null, charId, seen);
         }
 
-        // SkinShrink cache を消したまま、ReflectChar で到達できなかった entry を孤児化させない安全網。
-        // *SkinShrink config は singleChar:null で登録され全 target char を dirty にするため、通常は
-        // 全 entry が ReflectChar (env / holeScene 両走査) で再構築され seen に積まれる。よってここで
+        // SkinShrink cache を消したまま ReflectChar で到達できなかった entry を孤児化させない安全網。
         // 残るのは FindCharacter で GameObject を取れなかった scene 取りこぼし entry のみ (通常起きない保険)。
-        // seen の char を skip するのは、RefreshAllByConfig が skin を素から push し直し、ReflectChar が
-        // phase (g) で被せた BreastFlatten clone を上書きして flatten が消える (skin shrink だけ残る不具合)
-        // のを防ぐため。seen の char は ReflectChar で fresh な sharedMesh に再構築済みなので skip しても
-        // 孤児化しない。
-        // 注: ReflectChar が例外で reflect 失敗した char も seen に積まれる (seen.Add は try 外) ため
-        // skip される = この安全網の push 再適用対象外になる。次回 config 変更で再 reflect される。
+        // seen の char を skip する理由: RefreshAllByConfig が skin を素から push し直すと、ReflectChar が
+        // phase (g) で被せた BreastFlatten clone を上書きして flatten が消える (skin shrink だけ残る不具合)。
+        // seen の char は ReflectChar で fresh な sharedMesh に再構築済みなので skip しても孤児化しない。
+        // 例外で reflect 失敗した char も seen に積まれる (seen.Add は try 外) ため push 再適用対象外になるが、
+        // 次回 config 変更で再 reflect される。
         if ((s_cacheFlags & CacheFlags.SkinShrink) != 0)
             SkinShrinkCoordinator.RefreshAllByConfig(seen);
 
@@ -222,8 +215,7 @@ internal sealed class CostumeReflectionCoordinator : MonoBehaviour
             if (hasTops)    TopsLoader.ApplyDirectly(character, t.DonorChar, t.DonorCostume);
             // Bottoms-only のみ cloth weight-shift を補完する。Tops override 持ち (Bottoms 併用含む) は
             // TopsLoader.Apply 末尾の BreastClothWeightShifter.ApplyFor が cloth を担うため、二重適用回避で skip。
-            // Bottoms-only は injected donor / 距離保存対象 SMR を持たないため flattenVerts:true 一律で正しい
-            // (旧 WeightShifter.Refresh の per-SMR モード保存 distancePreservedSmrIds は不要)。
+            // Bottoms-only は injected donor / 距離保存対象 SMR を持たないため flattenVerts:true 一律で正しい。
             // Tops 併用経路へ流用する場合は per-SMR モード保存が必要になるため要再設計。
             if (hasBottoms && !hasTops)
                 BreastClothWeightShifter.ApplyFor(character, charId, flattenVerts: true);
@@ -244,9 +236,6 @@ internal sealed class CostumeReflectionCoordinator : MonoBehaviour
     /// <see cref="ReflectChar"/> が canonical 順 (Bottoms→Tops) で再適用する。外した garment は RestoreFor で
     /// 視覚的に外れ、残存 override は native baseline から再構築されるため、cloth flatten / skin_upper swap /
     /// companion 同期が順序非依存で揃う。config は変えないため cache invalidate は不要 (ReflectChar は cache hit で再利用)。
-    ///
-    /// 旧来のトグル解除は env の 1 体のみ surgical に RestoreFor + skin だけ ReapplyForCharId する per-path 処理で、
-    /// 残存 Bottoms の cloth 再 flatten 欠落 / skin_upper 所有権 / HoleScene companion 未復元の非対称を生んでいた。
     /// </summary>
     internal static void ReflectToggleOff(CharID charId)
     {

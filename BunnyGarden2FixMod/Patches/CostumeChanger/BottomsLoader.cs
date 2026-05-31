@@ -457,7 +457,7 @@ public class BottomsLoader : MonoBehaviour
             foreach (var kv in donorByName)
             {
                 var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers);
-                // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を対称に守る。
+                // SwapSmr 前に Registry へ native を確定 (memory feedback_native_smr_registry_invariant)。
                 Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
                 SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected,additive)");
@@ -471,8 +471,7 @@ public class BottomsLoader : MonoBehaviour
             foreach (var kv in donorByName)
             {
                 if (!targetByName.TryGetValue(kv.Key, out var targetSmr)) continue;
-                // memory feedback_native_smr_registry_invariant: SwapSmr で sharedMesh を MOD donor mesh に
-                // 差し替える前に Registry に native を確定させる。TopsLoader と対称。
+                // SwapSmr で MOD donor mesh に差し替える前に Registry へ native を確定 (memory feedback_native_smr_registry_invariant)。
                 Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSmr);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: targetSmr, injectedGo: null);
                 SwapSmr(targetSmr, kv.Value, ctx.Character, kv.Key);
@@ -485,7 +484,7 @@ public class BottomsLoader : MonoBehaviour
             {
                 if (targetByName.ContainsKey(kv.Key)) continue;
                 var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers);
-                // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を対称に守る。
+                // SwapSmr 前に Registry へ native を確定 (memory feedback_native_smr_registry_invariant)。
                 Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
                 SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected)");
@@ -501,7 +500,7 @@ public class BottomsLoader : MonoBehaviour
                 if (donorByName.ContainsKey(kv.Key)) continue;
                 // 既に inactive ならログ抑制（冪等）
                 if (!kv.Value.gameObject.activeSelf) continue;
-                // memory feedback_native_smr_registry_invariant: (a) と同方針。
+                // hide 経路でも Capture 直前に Registry へ native を確定 (memory feedback_native_smr_registry_invariant)。
                 Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, kv.Value);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: kv.Value, injectedGo: null);
                 kv.Value.gameObject.SetActive(false);
@@ -536,7 +535,7 @@ public class BottomsLoader : MonoBehaviour
         {
             // (c) の hide のみ (donor が bottoms 持たない RIN/MIUKA SwimWear) → 古い Bottoms contribution が
             // あれば削除し、Tops も無ければ skin SMR を素 mesh に戻す。
-            // UnregisterBottoms の再捕獲前に flatten clone を巻き戻す (Tops 側と同方針)。
+            // UnregisterBottoms の再捕獲前に flatten clone を巻き戻す。
             BreastFlattenApplier.RestoreFor(ctx.Character);
             SkinShrinkCoordinator.UnregisterBottoms(ctx.Character);
         }
@@ -589,10 +588,9 @@ public class BottomsLoader : MonoBehaviour
             return;
         }
 
-        // memory feedback_native_smr_registry_invariant: SwapSmr で sharedMesh を Babydoll donor mesh に
-        // 差し替える前に Registry に native を確定させる。これにより RestoreFor の TryGet が真 native
-        // (target 元 skin_upper) を返し、Phase 6 で `?? snap.OriginalMesh` fallback を撤廃しても
-        // Bottoms+BreastFlatten 経路で mesh_skin_upper が null 代入される regression を防ぐ。
+        // SwapSmr で Babydoll donor mesh に差し替える前に Registry へ native を確定させる。これにより
+        // RestoreFor の TryGet が真 native (target 元 skin_upper) を返し、Bottoms+BreastFlatten 経路で
+        // mesh_skin_upper が null 代入される regression を防ぐ (memory feedback_native_smr_registry_invariant)。
         Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSkinUpper);
         CaptureSnapshotIfFirst((ctx.InstanceId, "mesh_skin_upper"), wasInjected: false, smr: targetSkinUpper, injectedGo: null);
         // skin_upper は透過レイヤではないので Tops 側と同じく skipActivateForTransparentLayer:false で swap
@@ -672,8 +670,8 @@ public class BottomsLoader : MonoBehaviour
                 {
                     smr.gameObject.SetActive(snap.OriginalActive);
                     smr.enabled = snap.OriginalEnabled;
-                    // memory feedback_native_smr_registry_invariant: Registry が native の単一権威 (Phase 6 完了)。
-                    // Registry が fake-null/未登録の場合は null 代入で SMR 非描画になる (元から null と同等の意図動作)。
+                    // Registry が native の単一権威 (memory feedback_native_smr_registry_invariant)。
+                    // fake-null/未登録なら null 代入で SMR 非描画になる (元から null と同等の意図動作)。
                     smr.sharedMesh = Internal.NativeSmrRegistry.TryGet(smr);
                     if (snap.OriginalBones != null) smr.bones = snap.OriginalBones;
                     if (snap.OriginalMaterials != null) smr.sharedMaterials = snap.OriginalMaterials;
@@ -703,7 +701,7 @@ public class BottomsLoader : MonoBehaviour
         }
 
         // BreastFlatten clone を Destroy しておかないと、UnregisterBottoms → OriginalSkinUpper 再捕獲が
-        // flatten clone を「素」として焼き込んでしまう (Tops 側 RestoreFor と同方針)。
+        // flatten clone を「素」として焼き込んでしまう。
         BreastFlattenApplier.RestoreFor(character);
 
         // BottomsSkinShrink で書き換えた mesh_skin_lower / mesh_skin_upper を SkinShrinkCoordinator に

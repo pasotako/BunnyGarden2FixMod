@@ -65,8 +65,8 @@ public class Plugin : BaseUnityPlugin
         Patches.Settings.SettingsController.Initialize(gameObject);
         Patches.HideUI.HideUIRuntime.Initialize(gameObject);
         Patches.CostumeChanger.StockingsDonorLoader.Initialize(gameObject);
-        // 衣装系 mesh (BreastFlatten / Tops / Bottoms / cloth) の初期化。config 変更の live tune は
-        // CostumeReflectionCoordinator が一元処理するため、各 Initialize の購読順依存は無くなった。
+        // 衣装系 mesh (BreastFlatten / Tops / Bottoms / cloth) の初期化。
+        // config 変更の live tune は CostumeReflectionCoordinator が一元処理する。
         Patches.CostumeChanger.BreastFlattenApplier.Initialize(gameObject);
         Patches.CostumeChanger.BreastClothTuner.Initialize(gameObject);
         Patches.CostumeChanger.BreastClothWeightShifter.Initialize(gameObject);

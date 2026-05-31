@@ -19,13 +19,9 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 /// <see cref="MagicaCloth"/> instance。実機 (2026-05-23) では `Magica Cloth_Breast` が `BoneSpring` 型で
 /// hit するが、設計上 BoneCloth も識別対象に含めて将来拡張に備える。
 ///
-/// 公開 API:
-///   - <see cref="Initialize(GameObject)"/>: 12 *Breast{Jiggle,Inertia} に SettingChanged 購読 + scene unload 購読
-///   - <see cref="ApplyFor(GameObject, CharID)"/>: character の bust cloth に倍率適用
-///
-/// lifecycle: baseline cache <c>s_baselines</c> は per-MagicaCloth instanceId。scene unload では
-/// 明示 Clear せず (preserved character を温存)、Unity-null 化した instance は次回 ApplyFor の
-/// IsValid() / SerializeData null チェックで自然 skip される。
+/// baseline cache <c>s_baselines</c> は per-MagicaCloth instanceId。scene unload では明示 Clear せず
+/// (preserved character を温存)、Unity-null 化した instance は次回 ApplyFor の IsValid() /
+/// SerializeData null チェックで自然 skip される。
 /// </summary>
 internal static class BreastClothTuner
 {
@@ -52,8 +48,8 @@ internal static class BreastClothTuner
     private sealed class TuneEntry
     {
         public BustClothBaseline Baseline;
-        /// <summary>直近 Apply で書き込んだ値 tuple (damping, inertia, springPower)。
-        /// LastApplied と一致なら SetParameterChange skip。BoneCloth で springPower は NaN のまま。</summary>
+        /// <summary>直近 Apply で書き込んだ値 (damping, inertia, springPower)。一致なら
+        /// SetParameterChange skip。BoneCloth で springPower は NaN のまま。</summary>
         public (float D, float I, float S) LastApplied = (float.NaN, float.NaN, float.NaN);
     }
 
@@ -69,8 +65,7 @@ internal static class BreastClothTuner
     /// Plugin.Awake から呼ぶ。12 *Breast{Jiggle,Inertia} に SettingChanged subscribe、
     /// scene unload subscribe。冪等。
     /// </summary>
-    /// <param name="parent">現状未使用 (将来 coroutine host 用に予約)。<see cref="BreastFlattenApplier.Initialize"/>
-    /// との API 整合のため受け取る。</param>
+    /// <param name="parent">現状未使用。<see cref="BreastFlattenApplier.Initialize"/> との API 整合のため受け取る。</param>
     public static void Initialize(GameObject parent)
     {
         _ = parent;
@@ -121,11 +116,6 @@ internal static class BreastClothTuner
     /// <paramref name="character"/> 配下の bust cloth (BoneCloth または BoneSpring) すべてに対し、
     /// CharID 別の倍率を適用する。baseline 未捕獲なら初回捕獲する。
     /// LastApplied 比較で no-op 時は SetParameterChange skip。
-    ///
-    /// 呼出箇所:
-    ///   - <see cref="BreastFlattenSetupPatch"/>.Postfix (素キャラ初回 setup)
-    ///   - <see cref="TopsLoader"/>.Apply 完了直後 (ApplyOverlay の直後)
-    ///   - <see cref="BottomsLoader"/>.Apply 完了直後 (ApplyOverlay の直後)
     /// </summary>
     public static void ApplyFor(GameObject character, CharID charId)
     {
@@ -164,9 +154,9 @@ internal static class BreastClothTuner
             bool isSpring = mc.SerializeData.clothType == ClothProcess.ClothType.BoneSpring;
             var (newD, newI, newS) = ComputeTargets(entry.Baseline, jiggleMul, inertiaMul, isSpring);
 
-            // LastApplied と一致 → no-op (全 multiplier=1.0 で SetParameterChange 未呼出を実現)。
-            // 注: BoneCloth では newS / LastApplied.S が NaN になるため SameOrNan で NaN==NaN を等しいと扱う
-            // (`Mathf.Approximately(NaN, NaN)` は false を返すため、素直な比較だと no-op 最適化が壊れる)。
+            // LastApplied と一致 → no-op。BoneCloth では newS / LastApplied.S が NaN になるため
+            // SameOrNan で NaN==NaN を等しいと扱う (`Mathf.Approximately(NaN, NaN)` は false を返し、
+            // 素直な比較だと no-op 最適化が壊れる)。
             if (SameOrNan(entry.LastApplied.D, newD) &&
                 SameOrNan(entry.LastApplied.I, newI) &&
                 SameOrNan(entry.LastApplied.S, newS))
@@ -182,11 +172,10 @@ internal static class BreastClothTuner
             {
                 mc.SerializeData.inertiaConstraint.worldInertia = newI;
             }
-            // BoneSpring 特化: 揺れは springConstraint.springPower が支配するため、Jiggle 軸の主要書換を
-            // ここで行う。BoneCloth 系では newS = NaN なので skip される (springConstraint は両 type に
-            // field として存在するが、SpringConstraintParams.Convert で
-            // `(clothType == BoneSpring && useSpring) ? springPower : 0f` となり、BoneSpring 以外では
-            // effective 値が 0 化されるため、書換しても物理に反映されない)。
+            // BoneSpring では揺れを springConstraint.springPower が支配するため Jiggle 軸はこちらが主。
+            // BoneCloth では newS = NaN で skip (SpringConstraintParams.Convert が
+            // `(clothType == BoneSpring && useSpring) ? springPower : 0f` で effective 値を 0 化するため、
+            // 書換しても物理に反映されない)。
             if (isSpring && !float.IsNaN(newS) && mc.SerializeData.springConstraint != null)
             {
                 mc.SerializeData.springConstraint.springPower = newS;
@@ -200,17 +189,12 @@ internal static class BreastClothTuner
 
     /// <summary>
     /// character 配下から bust 物理 cloth を全て返す。
-    /// 判定: <see cref="ClothProcess.ClothType.BoneCloth"/> または <see cref="ClothProcess.ClothType.BoneSpring"/>
-    /// AND rootBones 配下に <c>R_breast1_skinJT</c> または <c>L_breast1_skinJT</c> を含む。
+    /// 判定: clothType が BoneCloth または BoneSpring AND rootBones 配下に
+    /// <c>R_breast1_skinJT</c> または <c>L_breast1_skinJT</c> を含む。
     ///
-    /// 実機調査 (2026-05-23) で bust 物理は <c>Magica Cloth_Breast</c> という名前で <c>clothType=BoneSpring</c>
-    /// を使っていることを確認。BoneSpring は単独 bone を spring 駆動する simplified 型で、bust の左右が
-    /// それぞれ <c>L/R_breast1_skinJT</c> の 2 root を持つ。
-    ///
-    /// BoneSpring 固有の制約: <c>ClothSerializeData.Convert()</c> 内で
-    /// <c>result.gravity = (clothType == BoneSpring) ? 0f : gravity;</c> となっており、BoneSpring では
-    /// gravity が internal params で常に 0 化される可能性がある。*BreastGravity の効きは限定的な場合あり。
-    /// damping (Jiggle 軸) と worldInertia (Inertia 軸) は両 type 共通で書換有効。
+    /// BoneSpring 固有の制約: <c>ClothSerializeData.Convert()</c> で
+    /// <c>result.gravity = (clothType == BoneSpring) ? 0f : gravity;</c> となるため BoneSpring では
+    /// gravity が常に 0 化されうる。damping (Jiggle 軸) と worldInertia (Inertia 軸) は両 type 共通で書換有効。
     /// </summary>
     private static List<MagicaCloth> FindBustClothComponents(GameObject character)
     {
@@ -233,8 +217,7 @@ internal static class BreastClothTuner
     }
 
     /// <summary>
-    /// MagicaCloth が rootBones (BoneCloth の駆動 bone リスト) 配下に R/L_breast1_skinJT を含むか判定。
-    /// rootBones の子孫を再帰的に walk して判定する。
+    /// rootBones (駆動 bone リスト) の子孫を再帰 walk して R/L_breast1_skinJT を含むか判定。
     /// </summary>
     private static bool ContainsBreastBone(MagicaCloth mc)
     {

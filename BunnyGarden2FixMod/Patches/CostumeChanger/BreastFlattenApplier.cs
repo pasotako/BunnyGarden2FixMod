@@ -33,7 +33,7 @@ internal static class BreastFlattenApplier
     private const string FlattenCloneSuffix = "_breastflat";
 
     // native_upper への NN マッチ上界（m）。継ぎ目ゲート(SkinUpperSeamConformDist)とは独立軸で、
-    // ゲート通過頂点の補正先 native weight の誤マッチのみ除外する。構造的値なので Config 化しない（旧 MaxMatchDist 相当）。
+    // ゲート通過頂点の補正先 native weight の誤マッチのみ除外する。構造的値なので Config 化しない。
     private const float SeamConformNativeMatchDist = 0.03f;
     // 腕除外 X 半幅（torso |x|<0.20、腕 |x|>0.3。0.25 で torso のみ conform）。構造的値なので Config 化しない。
     private const float SeamConformXHalf = 0.25f;
@@ -112,10 +112,9 @@ internal static class BreastFlattenApplier
             return;
         }
 
-        // memory feedback_native_smr_registry_invariant: ApplyOverlay は HarmonyX patch 順 alphabetical で
-        // BreastFlattenSetupPatch < TopsSetupPatch / BottomsSetupPatch のため、setup() Postfix chain で
-        // **最初** に skin_upper.sharedMesh を mutate する MOD 経路。ここで真 native を確定して
-        // 後段呼出を idempotent にする。
+        // ApplyOverlay は HarmonyX patch 順 alphabetical で BreastFlattenSetupPatch < TopsSetupPatch /
+        // BottomsSetupPatch のため、setup() Postfix chain で最初に skin_upper.sharedMesh を mutate する MOD
+        // 経路。ここで真 native を確定して後段呼出を idempotent にする。
         Internal.NativeSmrRegistry.GetOrCapture(character, smr);
 
         // pure-native: flatten 駆動時のみ視覚 skin_upper を Babydoll に swap（cloth と同じ flat surface に揃える）。
@@ -426,7 +425,7 @@ internal static class BreastFlattenApplier
     ///     skin_upper を Babydoll に swap (BreastFlatten>0 時) + OriginalSkinUpper を同期するため、
     ///     本クラスは pure-native のみ swap を担当する。full-body 衣装 target でも readable cloth (SwimWear 等)
     ///     なら同 Phase が swap する (non-readable=Bunnygirl は native 維持)。ここで swap すると ApplyOverlay は
-    ///     phase(g) = RegisterBottoms の後で走るため push 済 native clone を snapshot に焼き込む（plan-review C1）。
+    ///     phase(g) = RegisterBottoms の後で走るため push 済 native clone を snapshot に焼き込む。
     ///   - Babydoll skin 未 preload: native flatten に fallback（preload 完了後 Refresh で再来）。
     ///   - 既に swap 済（snapshot 存在）: idempotent skip。
     ///
@@ -449,7 +448,6 @@ internal static class BreastFlattenApplier
             return;
 
         SmrSnapshotStore.Capture(SnapshotKind.BreastFlatten, instanceId, SwapSnapshotKindName, false, smr, null);
-        // NativeSmrRegistry の native 確定は ApplyOverlay 冒頭で済んでいる (本 helper を呼ぶ単一経路)。
         // SwapSmr で sharedMesh を Babydoll に書き替えても Registry は真 native を session 不変で保持する。
         CostumeMeshSwapper.SwapSmr(smr, babydollSkinUpper, character, "BreastFlatten", skipActivateForTransparentLayer: false);
         PatchLogger.LogDebug($"[BreastFlatten] native skin_upper を Babydoll に swap ({character.name} char={charId})");
@@ -470,7 +468,6 @@ internal static class BreastFlattenApplier
         {
             smr.gameObject.SetActive(snap.OriginalActive);
             smr.enabled = snap.OriginalEnabled;
-            // memory feedback_native_smr_registry_invariant: Registry が native の単一権威 (Phase 6 完了)。
             // Registry が fake-null/未登録の場合は null 代入で SMR 非描画になる (元から null と同等の意図動作)。
             smr.sharedMesh = Internal.NativeSmrRegistry.TryGet(smr);
             if (snap.OriginalBones != null) smr.bones = snap.OriginalBones;
@@ -561,8 +558,8 @@ internal static class BreastFlattenApplier
     }
 
     /// <summary>
-    /// <paramref name="verts"/> を in-place で deform する共通 helper。
-    /// <see cref="ApplyOverlay"/> と <see cref="BuildFlattenedClone"/> の重複ループを統合。
+    /// <paramref name="verts"/> を in-place で deform する共通 helper（<see cref="ApplyOverlay"/> と
+    /// <see cref="BuildFlattenedClone"/> が共有）。
     ///
     /// 3 pass:
     ///   Pass 1: 頂点 i ごとに raw amountEff = clamp01(wT) * amount (wT &lt; threshold は 0)。
@@ -807,12 +804,9 @@ internal static class BreastFlattenApplier
             //     先行する SMR snapshot 復元ループが既に sharedMesh = addressables stable 原本
             //     に戻している。我々がここで触ると正しい原本を上書きしてしまうので、何もしない。
             //
-            //   ケース B) ApplySkinShrinkPhase の else 分岐 (no swap で UnregisterTops 呼ぶケース) 経由
-            //     ※ 現 plan では本経路に明示 hook を入れていないため通常到達しない (ApplyDirectly 経由なら
-            //       RestoreFor がケース A をやってくれているため)。万一到達した場合のフェイルセーフ:
-            //     sharedMesh はまだ flatten clone のまま。Destroy 先にすると Unity-null 化して
-            //     UnregisterTops の OriginalSkinUpper 再捕獲が destroyed mesh を焼いてしまうので、
-            //     sharedMesh を Entry.BaseMesh に巻き戻してから Destroy する。
+            //   ケース B) sharedMesh がまだ flatten clone のまま到達したケースのフェイルセーフ
+            //     Destroy 先にすると Unity-null 化して UnregisterTops の OriginalSkinUpper 再捕獲が
+            //     destroyed mesh を焼いてしまうので、sharedMesh を Entry.BaseMesh に巻き戻してから Destroy する。
             //
             // 判定: smr.sharedMesh が "_breastflat" suffix の clone のままならケース B、それ以外はケース A。
             var smr = FindSkinUpper(character);
@@ -848,7 +842,7 @@ internal static class BreastFlattenApplier
         var preservedKeys = new List<int>();
         foreach (var kv in s_entries)
         {
-            // m_holeScene preserved character は GameObject が生き残る (memory feedback_scene_unload_snapshot_clear)。
+            // m_holeScene preserved character は GameObject が生き残る。
             // Unity-null でない entry はそのまま温存する。Unity-null は dead 扱いで除去。
             if (kv.Value.Character != null)
             {
@@ -929,10 +923,10 @@ internal static class BreastFlattenApplier
         // 必要なら proxy SMR を生成
         if (entry.ProxySmr == null)
         {
-            // preload **mesh_skin_upper SMR GameObject 単体** をクローンする (bones / bindposes / structure を継承)。
+            // preload mesh_skin_upper SMR GameObject 単体をクローンする (bones / bindposes / structure を継承)。
             // CharacterHandle は親階層にあるため複製されない (= preload host guard 相当の問題は起きない)。
-            // memory feedback_loader_preload_host_mutex 違反にならないよう、誤って `transform.root.gameObject`
-            // 等で SMR の親 (CharacterHandle 持ち) を複製しないこと。
+            // preload host mutex 違反にならないよう、誤って `transform.root.gameObject` 等で SMR の親
+            // (CharacterHandle 持ち) を複製しないこと。
             var go = Object.Instantiate(preloadSkinUpper.gameObject, s_proxyHostRoot.transform, worldPositionStays: false);
             go.name = $"BreastFlattenProxy_{charId}_skinUpper";
             go.SetActive(false);
@@ -946,11 +940,10 @@ internal static class BreastFlattenApplier
             }
             entry.ProxySmr.name = "mesh_skin_upper"; // CombineSkinSmrs の summary 表示用
 
-            // 防衛: 万一 mesh_skin_upper GameObject に MagicaCloth 系 component が付いていた場合、
-            // BuildAndRun が proxy SMR の sharedMesh を referenceInitSetupData.originalMesh で巻き戻す
-            // (memory reference_magicacloth_originalmesh_override) 可能性があるため、proxy 上では
-            // すべて Destroy する。通常 mesh_skin_upper には MagicaCloth は attach されないが (Task 1 Step 4 で
-            // 確認)、preload donor の prefab 構成変更で将来 attach される可能性を考慮した保険。
+            // 万一 mesh_skin_upper GameObject に MagicaCloth 系 component が付いていた場合、BuildAndRun が
+            // proxy SMR の sharedMesh を referenceInitSetupData.originalMesh で巻き戻す可能性があるため、
+            // proxy 上ではすべて Destroy する。通常 mesh_skin_upper に MagicaCloth は attach されないが、
+            // preload donor の prefab 構成変更で将来 attach される可能性を考慮した保険。
             DestroyMagicaClothComponentsRecursive(go);
         }
 
@@ -979,10 +972,6 @@ internal static class BreastFlattenApplier
     /// 全 proxy entry の flatten clone を破棄する (proxy SMR GameObject 自体は保持)。
     /// 次回 <see cref="GetFlattenedReferenceSmr"/> で各 entry の sharedMesh が再生成される。
     /// 用途: BreastFlatten amount / smooth 変更時に CostumeReflectionCoordinator.Flush から呼ぶ。
-    ///
-    /// 二重防衛: <see cref="GetFlattenedReferenceSmr"/> 内でも <c>LastAmount</c> / <c>SourceSharedMesh</c>
-    /// 差替検出による再生成ロジックがあるため、本メソッドを呼ばなくても次回 Apply で正しい amount に追従する。
-    /// それでも明示的に呼ぶのは、(a) 旧 flatten Mesh asset の即時 GC、(b) cache 一貫性の意図を明示するため。
     /// </summary>
     public static void InvalidateProxyCache()
     {
@@ -1003,8 +992,7 @@ internal static class BreastFlattenApplier
 
     /// <summary>
     /// <paramref name="root"/> 配下の MagicaCloth 系 component を Destroy する。proxy SMR の
-    /// sharedMesh 巻き戻し (memory reference_magicacloth_originalmesh_override) 防衛用。
-    /// MagicaCloth2 の DLL に依存しないよう、型名文字列で動的判定する。
+    /// sharedMesh 巻き戻し防衛用。MagicaCloth2 の DLL に依存しないよう、型名文字列で動的判定する。
     /// </summary>
     private static void DestroyMagicaClothComponentsRecursive(GameObject root)
     {

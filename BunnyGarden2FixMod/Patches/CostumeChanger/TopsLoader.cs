@@ -34,8 +34,8 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 ///   - target がフルボディ衣装 (SwimWear / Bunnygirl / フルボディ DLC) 状態では常に additive(重ね着):
 ///     donor の Tops SMR を inject overlay し、target の元衣装 / 素肌 / skin_lower を一切 touch しない
 ///     （additiveMode = IsFullBodyCostume(target)）。donor=SwimWear も additive に含む
-///     （ワンピース水着の下半身は mesh_costume に内包され overlay される。
-///     plan 2026-05-30-swimwear-donor-additive）。非フルボディ base への SwimWear donor は従来どおり swap。
+///     （ワンピース水着の下半身は mesh_costume に内包され overlay される）。
+///     非フルボディ base への SwimWear donor は swap。
 ///   - mesh_costume_skirt* / mesh_costume_pants* は Bottoms 領域として除外（IsTopsCandidate）。
 ///   - 同名 SMR 重複は最初の 1 つだけ採用し警告ログ。2 つ目以降は swap / hide / inject いずれの
 ///     対象にもならず素のまま残る (Phase 0 ログで重複ゼロを確認済みの前提)。
@@ -322,15 +322,13 @@ public class TopsLoader : MonoBehaviour
         // base-aware additive モード:
         //   target がフルボディ衣装（SwimWear / Bunnygirl / 分離型でない DLC）のときは常に additive(重ね着):
         //   target の mesh_costume / 素肌 / skin_lower をそのまま残し、donor の Tops SMR を inject overlay する。
-        //   donor=SwimWear も additive に含める (旧: swap で full-body 置換していたが、(a) skin_upper のみ
-        //   Babydoll 化し skin_lower native のままで bottoms と不整合になる懸念、(b) 他 full-body 組合せとの
-        //   一貫性、の 2 点から重ね着へ統一。ワンピース水着の下半身は mesh_costume(Tops 候補) に内包され
-        //   ApplySmrPhase の additive inject で overlay される。plan 2026-05-30-swimwear-donor-additive)。
+        //   donor=SwimWear も additive に含める (skin_upper のみ Babydoll 化し skin_lower native のままで
+        //   bottoms と不整合になるのを避ける + 他 full-body 組合せとの一貫性のため)。ワンピース水着の下半身は
+        //   mesh_costume(Tops 候補) に内包され ApplySmrPhase の additive inject で overlay される。
         bool additiveMode = (targetCostume?.IsFullBodyCostume() ?? false);
 
-        // full-body target は上記 additiveMode で常に additive(inject only) になり「中途半端 swap」が
-        // 原理的に起きないため、旧 full-body target ガード (cb31ad4) は撤去した
-        // (additiveMode=IsFullBodyCostume(target) の下で guard 条件は恒偽。plan 2026-05-30-swimwear-donor-additive)。
+        // full-body target は additiveMode で常に additive(inject only) になり「中途半端 swap」が原理的に
+        // 起きないため full-body target ガードは持たない。
 
         if (!s_cache.TryGet((donorChar, donorCostume), out var donor))
         {
@@ -495,8 +493,7 @@ public class TopsLoader : MonoBehaviour
             foreach (var kv in donorByName)
             {
                 var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers);
-                // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を対称に守る
-                // (ApplySwimWearBottomsPhase の inject path と同型)。
+                // SwapSmr で MOD donor mesh に差し替える前に Registry へ native を確定 (memory feedback_native_smr_registry_invariant)。
                 Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
                 SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected,additive)");
@@ -510,9 +507,8 @@ public class TopsLoader : MonoBehaviour
             foreach (var kv in donorByName)
             {
                 if (!targetByName.TryGetValue(kv.Key, out var targetSmr)) continue;
-                // memory feedback_native_smr_registry_invariant: SwapSmr で sharedMesh を MOD donor mesh に
-                // 差し替える前に Registry に native を確定させる。Registry が単一権威となり、ApplyDirectly cycle
-                // 等の transient mesh 焼き込み race は構造的に発生しない (Phase 6 完了)。
+                // SwapSmr で MOD donor mesh に差し替える前に Registry へ native を確定させる。Registry が単一権威となり
+                // ApplyDirectly cycle 等の transient mesh 焼き込み race を構造的に防ぐ (memory feedback_native_smr_registry_invariant)。
                 Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSmr);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: targetSmr, injectedGo: null);
                 SwapSmr(targetSmr, kv.Value, ctx.Character, kv.Key);
@@ -525,7 +521,7 @@ public class TopsLoader : MonoBehaviour
             {
                 if (targetByName.ContainsKey(kv.Key)) continue;
                 var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers);
-                // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を対称に守る。
+                // SwapSmr 前に Registry へ native を確定 (memory feedback_native_smr_registry_invariant)。
                 Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
                 SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected)");
@@ -539,8 +535,7 @@ public class TopsLoader : MonoBehaviour
                 if (donorByName.ContainsKey(kv.Key)) continue;
                 // 既に inactive ならログ抑制（冪等）
                 if (!kv.Value.gameObject.activeSelf) continue;
-                // memory feedback_native_smr_registry_invariant: (a) と同方針。hide 経路でも
-                // Capture 直前に Registry に native を確定させる。
+                // hide 経路でも Capture 直前に Registry へ native を確定 (memory feedback_native_smr_registry_invariant)。
                 Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, kv.Value);
                 CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: kv.Value, injectedGo: null);
                 kv.Value.gameObject.SetActive(false);
@@ -561,7 +556,7 @@ public class TopsLoader : MonoBehaviour
     ///      mesh_costume_skirt は SwimWear donor 全般でループ内除外する（KANA SwimWear の bikini bottom もここで弾かれる）。
     /// 本 phase は非 additive(分離型 base + SwimWear donor) のときのみ実行する。full-body base + SwimWear donor は
     /// additive(重ね着) になり (additiveMode = IsFullBodyCostume(target))、target bottoms を hide しないため
-    /// 冒頭の `if (ctx.AdditiveMode) return;` で skip する (plan 2026-05-30-swimwear-donor-additive)。
+    /// 冒頭の `if (ctx.AdditiveMode) return;` で skip する。
     /// bottoms override 併用時も (c2) を走らせ順序非依存性を保証 (tops 先 / bottoms 先)。
     /// per-loader isolation: target 側のみ BottomsLoader 所有名を除外し、donor 側は除外しないため
     /// LUNA frill は inject 経路で重ねて両 frill 共存する。
@@ -623,11 +618,10 @@ public class TopsLoader : MonoBehaviour
         foreach (var kv in donorBottomsByName)
         {
             if (!targetBottomsByName.TryGetValue(kv.Key, out var targetSmr)) continue;
-            // memory feedback_native_smr_registry_invariant: ApplySmrPhase (a) と同型。SwapSmr で donor mesh に
-            // 置換する前に Registry に target の真 native を確定させる。これを忘れると phase (e)
+            // SwapSmr で donor mesh に置換する前に Registry へ target の真 native を確定させる。忘れると phase (e)
             // ApplyDistancePreserveForTops で donor mesh が native として焼かれ、Restore 時に
             // smr.sharedMesh = TryGet(=donor mesh) で target が donor mesh のまま残る (SwimWear donor +
-            // common bottoms SMR 経路で発症するクラスの bug)。
+            // common bottoms SMR 経路で発症する bug)。memory feedback_native_smr_registry_invariant。
             Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSmr);
             CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: targetSmr, injectedGo: null);
             SwapSmr(targetSmr, kv.Value, ctx.Character, kv.Key);
@@ -639,11 +633,9 @@ public class TopsLoader : MonoBehaviour
         {
             if (targetBottomsByName.ContainsKey(kv.Key)) continue;
             var injected = InjectSmrLogged(ctx.Character, kv.Key, ctx.Renderers, referenceName: "mesh_skin_lower");
-            // memory feedback_native_smr_registry_invariant: 規約「全 swap site で GetOrCapture」を
-            // 対称に守る。injected SMR は Restore で GameObject Destroy のため Registry 経由の Mesh 復元
-            // 経路は走らないが (実害無し)、phase (e) ApplyDistancePreserveForTops 経由の Registry 登録に
-            // 頼らず本 swap site で明示登録することで、phase (e) 未到達経路 (早期 abort / sharedMesh null
-            // 等) でも規約違反 LogError が出ない。
+            // injected SMR は Restore で GameObject Destroy のため Mesh 復元経路は走らないが、本 swap site で明示登録
+            // すれば phase (e) 未到達経路 (早期 abort / sharedMesh null 等) でも規約違反 LogError が出ない
+            // (memory feedback_native_smr_registry_invariant)。
             Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, injected);
             CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: true, smr: null, injectedGo: injected.gameObject);
             SwapSmr(injected, kv.Value, ctx.Character, kv.Key + "(injected)");
@@ -655,7 +647,7 @@ public class TopsLoader : MonoBehaviour
         {
             if (donorBottomsByName.ContainsKey(kv.Key)) continue;
             if (!kv.Value.gameObject.activeSelf) continue;
-            // memory feedback_native_smr_registry_invariant: (a) と同方針。hide でも Capture 直前に Registry 確定。
+            // hide でも Capture 直前に Registry へ native を確定 (memory feedback_native_smr_registry_invariant)。
             Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, kv.Value);
             CaptureSnapshotIfFirst((ctx.InstanceId, kv.Key), wasInjected: false, smr: kv.Value, injectedGo: null);
             kv.Value.gameObject.SetActive(false);
@@ -677,8 +669,7 @@ public class TopsLoader : MonoBehaviour
         // 非 additive: donor garment が Babydoll skin topology 前提のため flatten 非依存で常に swap。
         // additive (target=full-body 衣装): 通常は target 素肌維持で skip。ただし BreastFlatten 整合が要る
         // (flatten>0 + breast cloth readable) ときは Babydoll に swap する
-        // (BottomsLoader.ApplySkinUpperBabydollPhase と共通判定。SwimWear+Tops+flatten で flatten が反映されない
-        //  穴の修正)。non-readable cloth(Bunnygirl 等) / flatten=0 は従来通り素肌維持。
+        // (BottomsLoader.ApplySkinUpperBabydollPhase と共通判定)。non-readable cloth(Bunnygirl 等) / flatten=0 は素肌維持。
         if (ctx.AdditiveMode
             && !BreastFlattenApplier.ShouldSwapSkinForFlatten(ctx.Character, ctx.TargetCharID))
         {
@@ -709,10 +700,9 @@ public class TopsLoader : MonoBehaviour
         var targetSkinUpper = ctx.Renderers.FirstOrDefault(s => s != null && s.name == "mesh_skin_upper");
         if (donorSkinUpper != null && targetSkinUpper != null)
         {
-            // memory feedback_native_smr_registry_invariant: SwapSmr で sharedMesh を Babydoll donor mesh に
-            // 差し替える前に Registry に native を確定させる。これにより RestoreFor の TryGet が真 native
-            // (target 元 skin_upper) を返し、Phase 6 で `?? snap.OriginalMesh` fallback を撤廃しても
-            // Tops Override 解除時に mesh_skin_upper が null 代入される regression を防ぐ。
+            // SwapSmr で Babydoll donor mesh に差し替える前に Registry へ native を確定させる。これにより
+            // RestoreFor の TryGet が真 native (target 元 skin_upper) を返し、Tops Override 解除時に
+            // mesh_skin_upper が null 代入される regression を防ぐ (memory feedback_native_smr_registry_invariant)。
             Internal.NativeSmrRegistry.GetOrCapture(ctx.Character, targetSkinUpper);
             CaptureSnapshotIfFirst((ctx.InstanceId, "mesh_skin_upper"), wasInjected: false, smr: targetSkinUpper, injectedGo: null);
             SwapSmr(targetSkinUpper, donorSkinUpper, ctx.Character, "mesh_skin_upper");
@@ -909,11 +899,10 @@ public class TopsLoader : MonoBehaviour
 
         if (resolved != null)
         {
-            // memory feedback_native_smr_registry_invariant: resolved (_distpres clone) を sharedMesh に
-            // 書く前に Registry に native を確定させる。ApplySmrPhase の (a) swap 経路で既登録済の SMR は
-            // existing entry を return (no-op)。(b) inject / (c2) ApplySwimWearBottomsPhase で touch された
-            // SMR は本箇所で初めて Registry 登録される (sharedMesh = SwapSmr 後の donor mesh、
-            // addressables stable で suffix 無し → 規約違反 LogError は出ない)。
+            // resolved (_distpres clone) を sharedMesh に書く前に Registry へ native を確定させる
+            // (memory feedback_native_smr_registry_invariant)。(a) swap 経路で既登録済の SMR は no-op。
+            // (b) inject / (c2) で touch された SMR は本箇所で初めて登録される
+            // (sharedMesh = SwapSmr 後の donor mesh、addressables stable で規約違反 LogError は出ない)。
             // 注: character は ctx.Character (m_chara) を渡す。topSmr.transform.root は CharacterHandle.SetParent
             // で m_chara が EnvSceneBase root に親付けされているため m_chara より上を返し、phase (g) の
             // BreastClothWeightShifter.ApplyFor(character=m_chara) と Registry key が食い違う。
@@ -971,11 +960,10 @@ public class TopsLoader : MonoBehaviour
                 {
                     smr.gameObject.SetActive(snap.OriginalActive);
                     smr.enabled = snap.OriginalEnabled;
-                    // memory feedback_native_smr_registry_invariant: Registry が native の単一権威 (Phase 6 完了)。
-                    // TryGet の O(N) 全 entry 走査は本 discrete RestoreFor 経路 / RestoreSmr 経路のみで
-                    // 呼出され毎フレーム hot path 無し。SMR 数十 × char 12 = ~360 entry / RestoreFor 内 SMR
-                    // 数回呼出で μs オーダー。性能問題が出た時のみ smr InstanceID → char の逆引き index を追加する。
-                    // Registry が fake-null/未登録の場合は null 代入で SMR 非描画になる (元から null と同等の意図動作)。
+                    // Registry が native の単一権威 (memory feedback_native_smr_registry_invariant)。TryGet の
+                    // O(N) 全 entry 走査は discrete RestoreFor / RestoreSmr 経路のみで毎フレーム hot path 無し
+                    // (~360 entry で μs オーダー)。性能問題が出た時のみ smr InstanceID → char の逆引き index を追加する。
+                    // fake-null/未登録なら null 代入で SMR 非描画になる (元から null と同等の意図動作)。
                     smr.sharedMesh = Internal.NativeSmrRegistry.TryGet(smr);
                     if (snap.OriginalBones != null) smr.bones = snap.OriginalBones;
                     if (snap.OriginalMaterials != null) smr.sharedMaterials = snap.OriginalMaterials;

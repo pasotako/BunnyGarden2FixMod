@@ -63,9 +63,9 @@ internal static class BreastFlattenSetupPatch
         }
         else
         {
-            // Tops/Bottoms override。ApplyOverlay は push しない (gate OFF) ので cloth との順序非依存 → 従来順を維持。
-            // Tops/BottomsLoader 経路 (ApplySkinShrinkPhase→ApplyOverlay) で上書きされる前提も従来通り。
-            // flattenVerts は従来挙動を厳守: native tops cloth (= !topsOverride) のときのみ距離保存。
+            // Tops/Bottoms override。ApplyOverlay は push しない (gate OFF) ので cloth との順序非依存。
+            // Tops/BottomsLoader 経路 (ApplySkinShrinkPhase→ApplyOverlay) で後から上書きされる。
+            // flattenVerts は native tops cloth (= !topsOverride) のときのみ距離保存。
             // Tops override 時は false (TopsLoader が distance-preserve 済み)、Bottoms-only 時は true。
             BreastFlattenApplier.ApplyOverlay(chara, charId);
             BreastClothTuner.ApplyFor(chara, charId);

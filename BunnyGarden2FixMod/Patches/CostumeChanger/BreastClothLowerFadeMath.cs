@@ -6,7 +6,7 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 /// full-body 衣装 (1 枚 mesh_costume) の native fit で、skin_lower 域 (腰ラインより下) の衣装頂点へ
 /// 胸 flatten の距離保存補正が漏れるのを止める Y フェードの純算術。
 ///
-/// 使い方 (caller = <see cref="BreastClothWeightShifter"/>.TryApplyDistancePreserve):
+/// 使い方:
 ///   1. <see cref="ComputeFadeTopY"/> で baby-lower の max Y (腰ライン) を得る。
 ///   2. <see cref="ApplyLowerFade"/> で Preserve 出力 (preservedPv/preservedBw) を腰ラインより下で
 ///      base (native) へ引き戻す。上=full補正 / 下=native / 帯内=滑らか移行。

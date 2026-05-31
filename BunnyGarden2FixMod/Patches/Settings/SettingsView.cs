@@ -421,7 +421,6 @@ public class SettingsView : MonoBehaviour
                 continue;
             }
 
-            // 同一 group の連続ランを収集する。
             int runStart = idx;
             while (idx < entries.Count && entries[idx].Group == group) idx++;
 
@@ -673,7 +672,7 @@ public class SettingsView : MonoBehaviour
 
         header.RegisterCallback<ClickEvent>(_ =>
         {
-            // 状態の単一ソース化: ヘッダー生成時の collapsed クロージャ値ではなく現在値を再読して反転する。
+            // ヘッダー生成時の collapsed クロージャ値ではなく現在値を再読して反転する。
             SettingsCollapseState.SetCollapsed(section, group, !SettingsCollapseState.IsCollapsed(section, group));
             RenderContent();
         });

@@ -122,8 +122,7 @@ internal static class MeshDistancePreserver
 
         // 谷間 delta 縮小用の幾何。bindposes[idx] は mesh-local→bone-local の inverse bind なので、
         // その inverse で bone 原点を mesh-local 空間に戻す（donorVerts と同空間）。cleavageShrink>0 かつ
-        // cleavageWidth>0 かつ両胸骨が解決でき、間隔が有意のときのみ active。それ以外は cleavageActive=false で
-        // Pass3 が従来分岐（cleavageWidth>0 も条件に含め width=0 を明示 no-op 化）。
+        // cleavageWidth>0 かつ両胸骨が解決でき、間隔が有意のときのみ active。
         bool cleavageActive = false;
         Vector3 cleavageMid = Vector3.zero, cleavageAxis = Vector3.zero;
         float cleavageHalfSep = 0f;
@@ -303,8 +302,7 @@ internal static class MeshDistancePreserver
         var neighbors = new List<int>(16);
         var disp = new Vector3[donorVerts.Length];
 
-        // pushed/targetFallback/skippedInverted/boneScaleZeroed/maxPush/shareBand は Pass3Local へ移管。
-        // outOfRange/donorFallback は最終合算先として残す。
+        // outOfRange/donorFallback は Pass1/Pass3 の per-thread 統計を最後に合算する先。
         int outOfRange = 0, donorFallback = 0;
 
         // Pass 1: cloth → donor skin 初回サンプリング
@@ -529,7 +527,7 @@ internal static class MeshDistancePreserver
             // 谷間 (cleavageActive): 保存 offset を minOffset 床へ向けて c に比例して縮め、衣装を flat body へ
             //   引き下ろす。c = 幾何中心帯(band) × 胸 weight gate。谷間 skin は flatten で動かず push≒0 となり
             //   衣装が浮く問題の対症。cleavageActive ⟹ boneScalingOk (gate 経由) なので donorBoneWeights[i] は安全。
-            // target 法線方向に push し、skinShare で物理骨専属頂点を保護（縮小後の push に乗算、従来どおり）。
+            // target 法線方向に push し、skinShare で物理骨専属頂点を保護（縮小後の push に乗算）。
             float push;
             if (cleavageActive)
             {
@@ -815,7 +813,6 @@ internal static class MeshDistancePreserver
     }
 
     // 並列化発火閾値。これ未満の頂点数 (sleeve ~248v 等) は thread 起動 overhead が利得を上回るため serial。
-    // 固定値選好に従い const (Config 化しない)。
     private const int PARALLEL_VERTEX_THRESHOLD = 1024;
 
     // Pass 3 並列化用 thread-local 状態。scratch バッファ + per-thread 統計。
@@ -1010,8 +1007,7 @@ internal static class MeshDistancePreserver
 
     /// <summary>
     /// donor cloth bones[] から胸 bone <c>R_breast1_skinJT</c> / <c>L_breast1_skinJT</c> の index を解決する
-    /// (breast push-out 用)。bone 名完全一致、6 character 共通。いずれか未検出は -1 を返す
-    /// (BreastClothWeightShifter / BreastFlattenApplier の同名 resolver と同型。public 共有版が無いため局所保持)。
+    /// (breast push-out 用)。bone 名完全一致、6 character 共通。いずれか未検出は -1 を返す。
     /// </summary>
     private static (int rIdx, int lIdx) ResolveBreastBoneIndices(Transform[] bones)
     {

@@ -22,7 +22,7 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger.Internal;
 internal static class NativeSmrRegistry
 {
     /// <summary>
-    /// MOD 生成 Mesh の name suffix (規約違反検出用)。2026-05-28 plan 着手時に実コード grep で確定。
+    /// MOD 生成 Mesh の name suffix (規約違反検出用)。
     /// 新規 MOD 生成 Mesh が追加されたらここにも suffix 追加すること
     /// (spec §規約違反の早期検出 参照)。
     /// </summary>

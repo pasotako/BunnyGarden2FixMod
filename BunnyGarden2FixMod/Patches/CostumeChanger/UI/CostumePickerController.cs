@@ -1022,12 +1022,25 @@ public class CostumePickerController : MonoBehaviour
                 else TopsOverrideStore.Clear(id);
                 return;
             }
-            TopsLoader.ApplyDirectly(charObj, donor, costume);
+            // store(step 2) を更新済みの状態から canonical 再適用に揃える。
+            // 素の TopsLoader.ApplyDirectly 直叩きだと、Bar↔タイトル往復で preserved char の s_applied 抑止により
+            // Bottoms 切替時に Tops が再適用されず skin_upper の OriginalSkinUpper が native baseline で確定し破綻する。
+            // ReflectChar は hasBottoms→BottomsLoader.ApplyDirectly → hasTops→TopsLoader.ApplyDirectly の
+            // Bottoms→Tops 固定順で再構築する。
+            // 【収束順序依存 (M-1/M-R2)】SkinShrinkCoordinator.RegisterTops=無条件上書き /
+            //   RegisterBottoms=OriginalSkinUpper==null 時のみ捕捉、という非対称ゆえに「Tops を後に置く」と
+            //   Tops の Babydoll 確定が最終勝者になる。後続改修者はこの呼び順を入れ替えないこと。
+            // companion(HoleScene) スコープ (M-3/M-R3): ここは env 本体 1 体のみ反映 (空 seen に charObj だけ投入)。
+            //   toggle-off の ReflectToggleOff は env+HoleScene 両走査で対称だが、切替の dual-scene 化はスコープ
+            //   拡大のため本 fix では行わない (素 ApplyDirectly と同スコープ＝新規退行ではない。別 issue 化推奨)。
+            CostumeReflectionCoordinator.ReflectChar(charObj, id, new HashSet<int>());
             m_view.Render(BuildRenderData());
         }
         catch (Exception ex)
         {
             PatchLogger.LogWarning($"[CostumePicker] 上衣移植失敗: {ex}");
+            // ここに到達するのは ReflectChar 呼出 *前後* の例外 (FindCharacter / store Set 等)。ReflectChar 内部の
+            // ApplyDirectly 例外は ReflectChar 自身が swallow するためここには来ない (C-2: toggle-off/live-tune と対称)。
             // 部分的に SMR 変更後の例外で乖離が起きないよう、SMR を素状態に戻してから
             // store を旧状態へ revert する（Bottoms と同方針）。
             var envC = GBSystem.Instance?.GetActiveEnvScene();
@@ -1072,13 +1085,23 @@ public class CostumePickerController : MonoBehaviour
                 else BottomsOverrideStore.Clear(id);
                 return;
             }
-            BottomsLoader.ApplyDirectly(charObj, donor, costume);
+            // store(step 2) を更新済みの状態から canonical 再適用に揃える (ApplyTopsAsync と対称)。
+            // 素の BottomsLoader.ApplyDirectly 直叩きだと、Tops 併用 + Bar↔タイトル往復後の Bottoms 切替で
+            // Tops が再適用されず skin_upper が native baseline で flatten され破綻する (postmortem §13)。
+            // ReflectChar が hasBottoms→BottomsLoader.ApplyDirectly → hasTops→TopsLoader.ApplyDirectly の
+            // Bottoms→Tops 固定順で再構築し、後段の Tops Apply が OriginalSkinUpper=Babydoll を確定する。
+            // 【収束順序依存 (M-1/M-R2)】RegisterTops=無条件上書き / RegisterBottoms=OriginalSkinUpper==null 時のみ
+            //   捕捉、の非対称ゆえ Tops を後に置くのが安全。後続改修者はこの呼び順を入れ替えないこと。
+            // companion(HoleScene) スコープ (M-3/M-R3): ApplyTopsAsync と同じく env 本体 1 体のみ反映 (別 issue)。
+            CostumeReflectionCoordinator.ReflectChar(charObj, id, new HashSet<int>());
             m_view.Render(BuildRenderData());
         }
         catch (Exception ex)
         {
             PatchLogger.LogWarning($"[CostumePicker] 下衣移植失敗: {ex}");
-            // ApplyDirectly が部分的に SMR を変更した後の例外で乖離が起きないよう、
+            // ここに到達するのは ReflectChar 呼出 *前後* の例外 (FindCharacter / store Set 等)。ReflectChar 内部の
+            // ApplyDirectly 例外は ReflectChar 自身が swallow するためここには来ない (C-2: toggle-off/live-tune と対称)。
+            // 部分的に SMR を変更した後の例外で乖離が起きないよう、
             // SMR を素状態に戻してから override store を旧状態へ revert する。
             // RestoreFor は snapshot 未捕捉時は no-op。
             var envC = GBSystem.Instance?.GetActiveEnvScene();

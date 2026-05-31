@@ -4,9 +4,10 @@ using UnityEngine;
 namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 
 /// <summary>
-/// swap した Babydoll mesh_skin_upper の腰継ぎ目頂点の boneWeight を native upper の weight へ戻す純関数。
-/// swap で upper weight が Babydoll 順に変わり native lower との skinning が pose 依存で食い違う問題を、
-/// 継ぎ目頂点のみ native weight へ全置換して解消する（胸域は触らない＝flatten 保護）。
+/// swap した Babydoll mesh_skin_upper の腰継ぎ目頂点を native upper へ合わせ直す純関数。
+/// swap で upper の boneWeight が Babydoll 順に変わり native lower との skinning が pose 依存で食い違う問題と、
+/// Babydoll の腰形状が元体型と違うことによる静的な位置ズレを、継ぎ目頂点のみ native upper の weight と位置へ
+/// 全置換(snap)して解消する（胸域は触らない＝flatten 保護）。
 ///
 /// 継ぎ目の localization は「target 自身の Babydoll mesh_skin_lower への近接 (seamDist 以内)」で行う。
 /// upper clone と同一 Babydoll asset なので seam が構造的に coincident で、live lower の mask/push に
@@ -17,9 +18,10 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 internal static class SkinUpperWeightConformer
 {
     /// <summary>
-    /// <paramref name="weights"/>（clone=Babydoll の boneWeights）を in-place で native upper の weight に全置換する。
+    /// <paramref name="weights"/> と <paramref name="verts"/>（clone=Babydoll）を in-place で
+    /// native upper の weight / 位置に全置換(snap)する。weight と位置は同一頂点で原子的に結合する。
     /// </summary>
-    /// <param name="verts">clone 頂点（Babydoll upper）。</param>
+    /// <param name="verts">clone 頂点（Babydoll upper）。継ぎ目頂点は native upper 位置へ in-place で snap される。</param>
     /// <param name="weights">clone boneWeights（in-place 改変）。baby bone 順の index。</param>
     /// <param name="babyBoneNames">clone SMR の bones[].name（baby 順、index ↔ 名の対応）。</param>
     /// <param name="nativeVerts">native upper 頂点（補正先 weight の NN ソース）。</param>
@@ -79,7 +81,8 @@ internal static class SkinUpperWeightConformer
             // 寄せ先 native weight の bone 名が baby に 1 つも無い頂点は skip（baby weight 保持）。
             // 全置換すると Pack の fallback で baby idx0 へフルバインドし当該頂点だけ skinning が崩れるため。
             if (!TryReencode(nativeWeights[ku], nativeBoneNames, babyNameToIdx, out var nat)) continue;
-            weights[i] = nat;   // 二値・全置換（フェード無し）
+            weights[i] = nat;            // 二値・全置換（フェード無し）
+            verts[i] = nativeVerts[ku];  // 位置も最近傍 native upper 頂点へ snap（weight と原子的に結合）
             conformed++;
         }
         return conformed;

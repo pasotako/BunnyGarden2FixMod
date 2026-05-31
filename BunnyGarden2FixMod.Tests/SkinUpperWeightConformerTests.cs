@@ -72,6 +72,44 @@ public class SkinUpperWeightConformerTests
         Assert.Equal(1, n);
         Assert.Equal(0, weights[0].boneIndex0);     // Spine1 = baby idx0
         Assert.Equal(0.9f, weights[0].weight0, 2);  // フェード無しの全置換
+        // 位置も最近傍 native upper 頂点 (0.005,1.100,0) へ snap される。
+        Assert.Equal(0.005f, verts[0].x, 3);
+        Assert.Equal(1.100f, verts[0].y, 3);
+        Assert.Equal(0f, verts[0].z, 3);
+    }
+
+    [Fact]
+    public void ConformInPlace_SeamVert_PositionAndWeightFromSameNativeVertex()
+    {
+        // 位置 snap と weight 全置換が「同一 native 要素(ku)」由来であることを distinctive な値で co-verify。
+        // 最近傍要素だけ唯一の位置(0.001)・唯一の weight(Spine1=0.7) を持たせ、両アサートが要素0 に収束することを示す。
+        var verts = new[] { new Vector3(0f, 1.100f, 0f) };
+        var weights = new[] { BW(0, 0.5f, 1, 0.5f) };
+        var babyNames = new[] { "Spine1", "Hip" };
+        var nNames = new[] { "Spine1", "Hip" };
+        var nVerts = new[]
+        {
+            new Vector3(0.001f, 1.100f, 0f),   // query(0,1.100,0) の最近傍 (dist 0.001 < NativeMatch)
+            new Vector3(0.018f, 1.100f, 0f),
+            new Vector3(0.001f, 1.085f, 0f),
+            new Vector3(0.018f, 1.110f, 0f),
+        };
+        var nWeights = new[]
+        {
+            BW(0, 0.7f, 1, 0.3f),   // 要素0 だけ distinctive (Spine1=0.7)
+            BW(1, 0.6f, 0, 0.4f), BW(0, 0.5f, 1, 0.5f), BW(1, 0.8f, 0, 0.2f),
+        };
+
+        int n = SkinUpperWeightConformer.ConformInPlace(
+            verts, weights, babyNames,
+            nVerts, nWeights, nNames,
+            LowerNearSeam(), SeamDist, NativeMatch, XHalf);
+
+        Assert.Equal(1, n);
+        Assert.Equal(0.001f, verts[0].x, 3);     // 位置は要素0 へ snap
+        Assert.Equal(1.100f, verts[0].y, 3);
+        Assert.Equal(0, weights[0].boneIndex0);   // weight も同じ要素0 由来 (Spine1=baby idx0)
+        Assert.Equal(0.7f, weights[0].weight0, 2);
     }
 
     [Fact]
@@ -90,6 +128,8 @@ public class SkinUpperWeightConformerTests
 
         Assert.Equal(0, n);
         Assert.Equal(0.5f, weights[0].weight0, 3);
+        Assert.Equal(0f, verts[0].x, 3);      // 位置も不変（胸保護）
+        Assert.Equal(1.250f, verts[0].y, 3);
     }
 
     [Fact]
@@ -115,6 +155,9 @@ public class SkinUpperWeightConformerTests
         Assert.Equal(1, n);
         Assert.Equal(0.9f, weights[0].weight0, 2);   // 1.104 = cutoff 以下 → native 全置換
         Assert.Equal(0.5f, weights[1].weight0, 3);   // 1.107 = cutoff 超 → 不変
+        Assert.Equal(0.005f, verts[0].x, 3);   // 1.104 = cutoff 以下 → 位置 snap
+        Assert.Equal(1.100f, verts[0].y, 3);
+        Assert.Equal(1.107f, verts[1].y, 3);   // 1.107 = cutoff 超 → 位置不変
     }
 
     [Fact]
@@ -138,6 +181,8 @@ public class SkinUpperWeightConformerTests
 
         Assert.Equal(0, n);
         Assert.Equal(0.5f, weights[0].weight0, 3);
+        Assert.Equal(0f, verts[0].x, 3);       // 位置も不変
+        Assert.Equal(1.100f, verts[0].y, 3);
     }
 
     [Fact]
@@ -156,6 +201,8 @@ public class SkinUpperWeightConformerTests
 
         Assert.Equal(0, n);
         Assert.Equal(0.5f, weights[0].weight0, 3);
+        Assert.Equal(0.45f, verts[0].x, 3);    // 位置も不変（腕）
+        Assert.Equal(1.100f, verts[0].y, 3);
     }
 
     [Fact]
@@ -176,6 +223,8 @@ public class SkinUpperWeightConformerTests
         Assert.Equal(0, n);
         Assert.Equal(0.5f, weights[0].weight0, 3);
         Assert.Equal(0.5f, weights[0].weight1, 3);
+        Assert.Equal(0f, verts[0].x, 3);       // weight skip 時は位置も不変（結合）
+        Assert.Equal(1.100f, verts[0].y, 3);
     }
 
     [Fact]
@@ -199,6 +248,8 @@ public class SkinUpperWeightConformerTests
 
         Assert.Equal(0, n);
         Assert.Equal(0.5f, weights[0].weight0, 3);
+        Assert.Equal(0f, verts[0].x, 3);       // native マッチ外れ → 位置も不変
+        Assert.Equal(1.100f, verts[0].y, 3);
     }
 
     [Fact]

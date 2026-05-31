@@ -610,8 +610,8 @@ PantiesAltSlotMatch=OFF のときはこの設定は無視されます。");
             true,
             @"上半身肌の腰継ぎ目を元の体型に合わせる
 上着・水着・胸平坦化で上半身肌 (mesh_skin_upper) を共通体型(Babydoll)に差し替えたとき、
-腰の継ぎ目だけ元の衣装のボーン追従に戻して、下半身肌との継ぎ目が動いたときにズレるのを抑えます。
-腰回りで動くと継ぎ目がズレる場合は ON のままにしてください。OFF で従来動作。");
+腰の継ぎ目だけ元の体型のボーン追従と位置に戻して、下半身肌との継ぎ目のズレ（動いたときの段差・
+静的な隙間）を抑えます。腰回りでズレや隙間が出る場合は ON のままにしてください。OFF で従来動作。");
 
         SkinUpperSeamConformDist = cfg.Bind("CostumeChanger", "SkinUpperSeamConformDist",
             0.005f,
@@ -1512,7 +1512,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         {
             Category = "CostumeChanger",
             Label    = "上半身肌の腰継ぎ目を元の体型に合わせる",
-            Desc     = "上着・水着・胸平坦化で上半身肌 (mesh_skin_upper) を共通体型(Babydoll)に差し替えたとき、\n腰の継ぎ目だけ元の衣装のボーン追従に戻して、下半身肌との継ぎ目が動いたときにズレるのを抑えます。\n腰回りで動くと継ぎ目がズレる場合は ON のままにしてください。OFF で従来動作。\n",
+            Desc     = "上着・水着・胸平坦化で上半身肌 (mesh_skin_upper) を共通体型(Babydoll)に差し替えたとき、\n腰の継ぎ目だけ元の体型のボーン追従と位置に戻して、下半身肌との継ぎ目のズレ（動いたときの段差・\n静的な隙間）を抑えます。腰回りでズレや隙間が出る場合は ON のままにしてください。OFF で従来動作。\n",
             Group    = "上半身肌 継ぎ目",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => SkinUpperSeamConform),

@@ -144,6 +144,40 @@ dotnet build BunnyGarden2FixMod/BunnyGarden2FixMod.csproj -p:BepInExVersion=6  #
 MSBuild Target が YAML / ConfigGen 自身の変更を検出して `Generated/Configs.g.cs` を自動再生成します。`net.noeleve.BunnyGarden2FixMod.dll` を `BepInEx/plugins/` にコピーするとゲーム起動時に `.cfg` に新エントリが書き出され、F9 パネルにも自動で行が追加されます。
 </details>
 
+## 開発者向け: テスト
+<details>
+<summary>開発者向け詳細</summary>
+
+`BunnyGarden2FixMod.Tests/`（xUnit）で **純関数** を単体テストします。対象は UnityEngine の `Vector3` / `Mathf` 等と `System` のみに依存するロジックで、実機の `UnityEngine.CoreModule.dll` を参照して検証します。BepInEx / Harmony / Plugin に依存するコードはテスト対象外です（実機で目視確認）。
+
+### 実行
+
+リポジトリルートから実行します。
+
+```bash
+dotnet test BunnyGarden2FixMod.Tests/BunnyGarden2FixMod.Tests.csproj
+```
+
+- ターゲットフレームワークは `net9.0` です。
+- 実機の `UnityEngine.CoreModule.dll` を参照します。既定パスは Steam の `BUNNY GARDEN 2_Data/Managed` です。別の場所にインストールしている場合は `-p:UnityManagedDir="C:/path/to/BUNNY GARDEN 2_Data/Managed"` で上書きしてください。
+- dll が見つからない場合は csproj の `CheckUnityManagedDir` ターゲットが原因を示すエラーを出します。
+
+### テストの追加
+
+1. テスト対象を **純関数**（UnityEngine + System のみに依存。BepInEx 型を参照しない）として用意します。
+2. `BunnyGarden2FixMod.Tests.csproj` の `Compile Include` の `ItemGroup` に 1 行追加し、ソースを直リンクします（本体 dll は参照しません）。
+
+   ```xml
+   <Compile Include="../BunnyGarden2FixMod/Patches/.../Foo.cs" Link="Linked/Foo.cs" />
+   ```
+
+   `internal` 型でも同一アセンブリ化されアクセス可能です。
+3. `BunnyGarden2FixMod.Tests/FooTests.cs` を作成します（`using Xunit;` と対象の namespace を `using`）。
+4. `dotnet test ...` で実行します。
+
+サンプル: `SpatialGridIndexTests.cs`（`SpatialGridIndex.cs` をリンクしてテスト）、`SmokeTest.cs`（ツールチェーン検証）。
+</details>
+
 ## 既知の問題点
 [Issues](https://github.com/kazumasa200/BunnyGarden2FixMod/issues)をご確認ください。バグや改善点、ほしい機能ありましたら[Issues](https://github.com/kazumasa200/BunnyGarden2FixMod/issues)もしくは[X](https://x.com/kazumasa200)までお願いします。  
 要望の際は右上のNew Issueから個別のissueを作ってください。

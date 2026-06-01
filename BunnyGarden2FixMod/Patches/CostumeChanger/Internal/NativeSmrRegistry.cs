@@ -23,17 +23,18 @@ internal static class NativeSmrRegistry
 {
     /// <summary>
     /// MOD 生成 Mesh の name suffix (規約違反検出用)。
-    /// 新規 MOD 生成 Mesh が追加されたらここにも suffix 追加すること
-    /// (spec §規約違反の早期検出 参照)。
+    /// suffix リテラルは <see cref="ModMeshSuffixes"/> に一元管理し、生成クラスと本配列の双方が
+    /// 同一定数を参照する (二重管理を排除し、新規 Mesh 追加時の片側忘れによる検出漏れを防ぐ)。
+    /// 新規 MOD 生成 Mesh が追加されたら <see cref="ModMeshSuffixes"/> に定数を足し、ここにも 1 行追加する。
     /// </summary>
     private static readonly string[] s_knownModSuffixes =
     {
-        "_breastshift",   // BreastClothWeightShifter
-        "_breastflat",    // BreastFlattenApplier
-        "_distpres",      // MeshDistancePreserver
-        "_transplanted",  // MeshBlendShapeTransplanter
-        "_offset",        // MeshSurfaceOffsetAdjuster, MeshPenetrationResolver (donor 側)
-        "_resolved",      // MeshPenetrationResolver (skin 側)
+        ModMeshSuffixes.BreastShift,   // BreastClothWeightShifter
+        ModMeshSuffixes.BreastFlat,    // BreastFlattenApplier
+        ModMeshSuffixes.DistPreserve,  // MeshDistancePreserver
+        ModMeshSuffixes.Transplanted,  // MeshBlendShapeTransplanter
+        ModMeshSuffixes.Offset,        // MeshSurfaceOffsetAdjuster, MeshPenetrationResolver (donor 側)
+        ModMeshSuffixes.Resolved,      // MeshPenetrationResolver (skin 側)
     };
 
     private readonly struct Key
@@ -53,6 +54,12 @@ internal static class NativeSmrRegistry
     }
 
     private static readonly Dictionary<Key, Entry> s_entries = new();
+
+    // smrInstanceId → Entry の逆引き index。Restore 経路 (TryGet / TryGetBoneNames) を O(1) 化する。
+    // 不変条件: s_entries に entry が存在 ⟺ s_bySmrId にも同一 Entry 参照が存在。
+    // これは「新規挿入時に必ず両 dict へ set」「ClearScene 削除時に ref 一致なら両方除去」で維持する。
+    // smr から charInstanceId を引けないため s_entries (Key=(char,smr)) は smr 単独 query に使えない。
+    private static readonly Dictionary<int, Entry> s_bySmrId = new();
 
     /// <summary>
     /// 指定 SMR の native sharedMesh を返す。未登録なら現 sharedMesh を native として登録して返す。
@@ -86,12 +93,16 @@ internal static class NativeSmrRegistry
         }
 
         var boneNames = CaptureBoneNames(smr);
-        s_entries[key] = new Entry
+        var entry = new Entry
         {
             Character = character,
             NativeMesh = current,
             NativeBoneNames = boneNames,
         };
+        s_entries[key] = entry;
+        // 逆引き index も同時に set (last-writer-wins)。recycled smrId が別 char で再登録された場合は
+        // 最新 entry で上書きされ、古い entry の除去は ClearScene の ref 一致 guard が担う。
+        s_bySmrId[key.SmrInstanceId] = entry;
         return current;
     }
 
@@ -102,16 +113,10 @@ internal static class NativeSmrRegistry
     internal static Mesh TryGet(SkinnedMeshRenderer smr)
     {
         if (smr == null) return null;
-        // SMR から char InstanceID を引けないので全 entry 走査になるが、規模は数十 SMR / char × 12 char 以下で許容範囲。
-        // TryGet は discrete RestoreFor / RestoreSmr 経路のみで呼出され毎フレーム hot path 無し。
-        // パフォーマンス問題が出たら smr InstanceID → char InstanceID の逆引き index を追加する。
-        foreach (var kv in s_entries)
-        {
-            if (kv.Key.SmrInstanceId == smr.GetInstanceID())
-            {
-                return kv.Value.NativeMesh == null ? null : kv.Value.NativeMesh;
-            }
-        }
+        // 逆引き index で O(1) 取得。smrInstanceId は SMR ごとに一意なため char を跨いだ衝突は
+        // (recycled smrId の過渡期を除き) 起きず、s_entries の (char,smr) Key 走査と同結果になる。
+        if (s_bySmrId.TryGetValue(smr.GetInstanceID(), out var entry))
+            return entry.NativeMesh == null ? null : entry.NativeMesh;
         return null;
     }
 
@@ -122,11 +127,8 @@ internal static class NativeSmrRegistry
     internal static string[] TryGetBoneNames(SkinnedMeshRenderer smr)
     {
         if (smr == null) return null;
-        foreach (var kv in s_entries)
-        {
-            if (kv.Key.SmrInstanceId == smr.GetInstanceID())
-                return kv.Value.NativeBoneNames;
-        }
+        if (s_bySmrId.TryGetValue(smr.GetInstanceID(), out var entry))
+            return entry.NativeBoneNames;
         return null;
     }
 
@@ -147,7 +149,18 @@ internal static class NativeSmrRegistry
                 deadKeys.Add(kv.Key);
             }
         }
-        foreach (var k in deadKeys) s_entries.Remove(k);
+        foreach (var k in deadKeys)
+        {
+            // 逆引き index も除去するが、recycled smrId が別 char で再登録され s_bySmrId[smrId] が
+            // 別 Entry を指している場合は消さない (= ref 一致 guard。最新 entry を温存)。
+            if (s_entries.TryGetValue(k, out var deadEntry)
+                && s_bySmrId.TryGetValue(k.SmrInstanceId, out var indexed)
+                && ReferenceEquals(indexed, deadEntry))
+            {
+                s_bySmrId.Remove(k.SmrInstanceId);
+            }
+            s_entries.Remove(k);
+        }
         PatchLogger.LogDebug($"[NativeSmrRegistry] ClearScene: {deadKeys.Count} entry 回収 (残 {s_entries.Count})");
     }
 

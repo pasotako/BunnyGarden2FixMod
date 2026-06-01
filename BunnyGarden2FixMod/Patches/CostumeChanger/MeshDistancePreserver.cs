@@ -669,7 +669,7 @@ internal static class MeshDistancePreserver
         }
 
         var adjMesh = Object.Instantiate(donorMesh);
-        adjMesh.name = donorMesh.name + "_distpres";
+        adjMesh.name = donorMesh.name + Internal.ModMeshSuffixes.DistPreserve;
         adjMesh.vertices = newVerts;
         if (newBoneWeights != null)
             adjMesh.boneWeights = newBoneWeights;

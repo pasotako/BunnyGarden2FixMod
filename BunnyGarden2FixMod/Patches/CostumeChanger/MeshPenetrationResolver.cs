@@ -530,7 +530,7 @@ internal static class MeshPenetrationResolver
         if (pushed > 0 && minOffset > 0f)
         {
             adjDonor = Object.Instantiate(donorMesh);
-            adjDonor.name = donorMesh.name + "_offset";
+            adjDonor.name = donorMesh.name + Internal.ModMeshSuffixes.Offset;
             for (int i = 0; i < donorVerts.Length; i++)
             {
                 donorVerts[i] += donorDisp[i];
@@ -559,7 +559,7 @@ internal static class MeshPenetrationResolver
                 }
             }
             adjSkin = Object.Instantiate(referenceMesh);
-            adjSkin.name = referenceMesh.name + "_resolved";
+            adjSkin.name = referenceMesh.name + Internal.ModMeshSuffixes.Resolved;
             adjSkin.vertices = skinBaseVerts;
             adjSkin.RecalculateBounds();
             // base normals は意図的に再計算しない（局所的な内側 offset でシェーディングは

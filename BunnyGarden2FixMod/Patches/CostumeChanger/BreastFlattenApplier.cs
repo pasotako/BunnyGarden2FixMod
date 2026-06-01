@@ -30,7 +30,8 @@ internal static class BreastFlattenApplier
 {
     private const float BreastWeightThreshold = 0.05f;
     private const float AmountUpperClamp = 1.0f;
-    private const string FlattenCloneSuffix = "_breastflat";
+    // suffix リテラルは Internal/ModMeshSuffixes に一元管理（規約違反検出との二重管理回避）。
+    private const string FlattenCloneSuffix = ModMeshSuffixes.BreastFlat;
 
     // native_upper への NN マッチ上界（m）。継ぎ目ゲート(SkinUpperSeamConformDist)とは独立軸で、
     // ゲート通過頂点の補正先 native weight の誤マッチのみ除外する。構造的値なので Config 化しない。

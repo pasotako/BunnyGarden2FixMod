@@ -39,7 +39,8 @@ namespace BunnyGarden2FixMod.Patches.CostumeChanger;
 /// </summary>
 internal static class BreastClothWeightShifter
 {
-    private const string ShiftCloneSuffix = "_breastshift";
+    // suffix リテラルは Internal/ModMeshSuffixes に一元管理（規約違反検出との二重管理回避）。
+    private const string ShiftCloneSuffix = Internal.ModMeshSuffixes.BreastShift;
 
     // Babydoll skin donor preload の二重起動防止。
     private static readonly HashSet<CharID> s_skinDonorPreloadInFlight = new();

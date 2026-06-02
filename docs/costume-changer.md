@@ -5,6 +5,32 @@ BepInEx + Harmony で `CharacterHandle.Preload` / `setup` をフックし、衣�
 
 対象コード: [`BunnyGarden2FixMod/Patches/CostumeChanger/`](../BunnyGarden2FixMod/Patches/CostumeChanger/)
 
+関連 doc（spoke）: [costume-changer-breast.md](costume-changer-breast.md)（BreastFlatten 補正系）/ [configs.md](configs.md)（Config 一覧）
+
+## 目次
+
+- [1. 全体像](#1-全体像) — 機能カテゴリ / 構成図 / フック概要
+- [2. Bottoms / Tops Transplant フロー](#2-bottoms--tops-transplant-フロー)
+- [3. 主要コンポーネント](#3-主要コンポーネント) — ファイル軸の早見表は節頭
+- [4. 設定値 (Configs)](#4-設定値-configs)
+- [5. ライフサイクル](#5-ライフサイクル)
+
+## 用語
+
+hub 全体で頻出する内部語。初出箇所では再説明しない。
+
+| 語 | 意味 |
+|----|------|
+| **SMR** | `SkinnedMeshRenderer`（スキニング Mesh 描画コンポーネント） |
+| **additive モード** | 既存 SMR を温存し donor SMR を重ねるだけの inject 専用経路（swap / hide しない）。target が SwimWear / Bunnygirl のとき選択される |
+| **graft** | donor 固有名の bone を target で解決できないとき、Transform のみの clone を target に植え替える最終フォールバック |
+| **distance preserve** | donor 服の「donor skin への浮き / めり込み具合」を、target skin に対して同じ距離関係で再現する補正 |
+| **Babydoll** | 上半身肌（`mesh_skin_upper`）の swap 元に使う共通体型 skin の固定 donor |
+| **pure-native** | 移植 cloth が無く、素キャラに flatten / 物理倍率のみ適用する経路 |
+| **proxy SMR** | flatten 済み skin を距離保存の参照にするための仮想 SMR（`GetFlattenedReferenceSmr`。詳細は spoke） |
+| **fake-null** | Destroy 済みの `UnityEngine.Object` が `== null` で true を返す Unity 特有の状態 |
+| **gate skip** | 条件ガードで本処理を飛ばした経路（例: `ShouldSwapSkinForFlatten` が false のとき skin swap を行わない） |
+
 ---
 
 ## 1. 全体像
@@ -20,10 +46,12 @@ BepInEx + Harmony で `CharacterHandle.Preload` / `setup` をフックし、衣�
 | **Mesh / Bone 補正** | 移植時の頂点・骨整合 | `BoneGrafter`, `MeshDistancePreserver`, `MeshBlendShapeTransplanter`, `MeshPenetrationResolver`, `MeshSurfaceOffsetAdjuster`, `BlendShapeFalloffApplier` |
 | **SkinShrink 統合制御** | 移植後の skin push 干渉解消 | `SkinShrinkCoordinator` |
 | **MagicaCloth2 物理 rebuild** | 衣装 swap / inject 後の物理クロス再構築 + collider clone | `MagicaClothRebuilder`, `MagicaClothInjectedColliderMarker` |
+| **Breast 補正** | 胸サイズ可変 (flatten) + flatten 時の skin/cloth motion 整合 + Babydoll swap 時の腰継ぎ目 conform + 胸物理倍率 | `BreastFlattenApplier`, `BreastClothWeightShifter`, `BreastWeightShiftMath`, `SkinUpperWeightConformer`, `BreastClothTuner`, `BreastFlattenSetupPatch` |
+| **Config 反映統合** | 衣装系 Config (`*BreastFlatten` / `Tops*` / `Bottoms*` / 共有 smooth) の live tune を一元購読し次フレーム coalesce 反映 | `CostumeReflectionCoordinator` |
 | **Wardrobe UI** | F7 で開く衣装選択パネル (5 タブ + Settings) | `UI/CostumePickerController`, `UI/CostumePickerView.*` |
 | **Wardrobe 履歴 / Live patches** | 既ロード経路 / Album 等で履歴汚染しないガード | `WardrobeHistoryGate`, `WardrobeLastLoadArg`, `WardrobeLivePatches`, `*ViewHistory` |
 | **永続化 (ExSave)** | override 状態をスロット非依存の `CommonData` に保存（全スロット共有） | 各 `*OverrideStore.RehydrateFromExSave` + `Internal/OverrideStorePersistence` |
-| **共通 helper** | Loader 間の重複集約 | `Internal/CharacterResolver`, `CostumeMeshSwapper`, `DonorPreloadCache<T>`, `DonorPreloadRegistry`, `SmrSnapshotStore` |
+| **共通 helper** | Loader 間の重複集約 | `Internal/CharacterResolver`, `CostumeMeshSwapper`, `CostumeTypeHelper`, `DonorPreloadCache<T>`, `DonorPreloadRegistry`, `SmrSnapshotStore` |
 
 ### 構成図
 
@@ -64,6 +92,10 @@ flowchart TB
     BL -.IsHostParent.-> DPR[DonorPreloadRegistry]
     TL -.IsHostParent.-> DPR
     CCP -.guard.-> DPR
+
+    Cfg[F9 Configs<br/>SettingChanged] --> CRC[CostumeReflectionCoordinator]
+    CRC -.live re-apply<br/>LateUpdate coalesce.-> BL
+    CRC -.live re-apply.-> TL
 ```
 
 `CostumeChangerPatch` は `CharacterHandle.Preload` の Prefix で各 Store の override 値を `LoadArg` に注入。
@@ -115,13 +147,18 @@ target / donor SMR / 候補リスト / 設定値 / additive モード等を stru
 
 完了後 `s_applied.Add(instanceId)` で再 Apply を dedup。
 
-#### BottomsLoader.Apply (2 phase + MagicaCloth rebind)
+> 5 phase 完了直後に **breast 補正 (phase g)** を被せる: `BreastFlattenApplier.ApplyOverlay` → `BreastClothTuner.ApplyFor` → `BreastClothWeightShifter.ApplyFor` の順。phase 4 の distance preserve は flatten 済 skin を proxy SMR (`GetFlattenedReferenceSmr`) 経由で参照済 (spoke [costume-changer-breast.md](costume-changer-breast.md) 参照)。
+
+#### BottomsLoader.Apply (3 phase + MagicaCloth rebind)
 
 | Phase | メソッド | 処理概要 |
 |------|---------|---------|
-| 1 | `ApplySmrPhase` | (a) swap / (b) inject / (c) hide。`AdditiveMode` (target=SwimWear/Bunnygirl) では (a)(c) を skip して (b) inject のみ。target が Bottoms 候補ゼロ (Bunnygirl 等) でも (b) で donor skirt を overlay 注入 |
-| 2 | `ApplySkinShrinkPhase` | `SkinShrinkCoordinator.RegisterBottoms` で BottomsSkinShrink contribution を登録 |
-| - | `RebindMagicaClothIfActive` | donor `MagicaCloth_Skirt` config を deep clone して target に rebuild |
+| 1 | `ApplySmrPhase` | (a) swap / (b) inject / (c) hide（additive 時の挙動は表下の註） |
+| 2 | `ApplySkinUpperBabydollPhase` | BreastFlatten>0 + Bottoms-only で `mesh_skin_upper` を Babydoll donor に swap (TopsLoader.ApplySkinUpperPhase と同型・対称)。`SkinShrinkCoordinator.RegisterBottoms` が `OriginalSkinUpper` を捕捉する前に素状態を整合させる |
+| 3 | `ApplySkinShrinkPhase` | `SkinShrinkCoordinator.RegisterBottoms` で BottomsSkinShrink contribution を登録 |
+| - | `RebindMagicaClothIfActive` | donor `MagicaCloth_Skirt` config を deep clone して target に rebuild (phase 1 内から呼ばれる) |
+
+> 註（phase 1 の additive 挙動）: target が SwimWear / Bunnygirl（= additive モード）のときは (a)(c) を skip して (b) inject のみ行う。target が Bottoms 候補ゼロ（Bunnygirl 等）でも (b) で donor skirt を overlay 注入する。
 
 #### Donor Preload (`DonorPreloadCache<T>`)
 
@@ -136,7 +173,7 @@ donor preload 中の `CharacterHandle.Preload` には FixMod 自身の `CostumeC
 
 #### Restore (移植解除)
 
-`*Loader.RestoreFor(GameObject character)` は `SmrSnapshotStore` の (kind, instanceId, smrKind, isInjected) エントリから元の `sharedMesh` / `bones` / `OriginalActive` / `OriginalEnabled` を復元する。
+`*Loader.RestoreFor(GameObject character)` は `SmrSnapshotStore` の (kind, instanceId, smrKind, isInjected) エントリから元の `bones` / `OriginalActive` / `OriginalEnabled` を復元する。`sharedMesh` の復元は `Internal.NativeSmrRegistry.TryGet(smr)` 経由 (Phase 6 完了で SmrSnapshot から `OriginalMesh` field 削除済、Registry が単一権威)。
 `InjectedGo` (target に存在せず donor 側にあった SMR を inject したケース) は `SetParent(null)` 後 `Object.Destroy`。
 完了後:
 
@@ -148,10 +185,28 @@ donor preload 中の `CharacterHandle.Preload` には FixMod 自身の `CostumeC
 
 ## 3. 主要コンポーネント
 
+各コンポーネントの早見表（ファイル軸。機能軸の一覧は §1「機能カテゴリ」）。詳細は各サブ節へ:
+
+| コンポーネント | 1 行責務 |
+|--------------|---------|
+| `BottomsLoader` / `TopsLoader` | 別キャラ下衣 / 上衣の移植本体（preload → phase 適用 → restore） |
+| `Internal/` helpers | Loader 間の重複集約（CharacterResolver / CostumeMeshSwapper / DonorPreloadCache 等） |
+| `NativeSmrRegistry` | SMR の native sharedMesh の単一権威（規約: clone 差替前に `GetOrCapture`） |
+| `BoneGrafter` | donor 固有 bone の解決（4 段フォールバック: 名前一致 → 正規化 → graft → rootBone） |
+| `MeshDistancePreserver` | Tops 移植時に donor 服の浮き具合を target skin で再現（4 パス） |
+| `SkinShrinkCoordinator` | Tops / Bottoms の skin push を character 単位に統合 |
+| `CostumeReflectionCoordinator` | 衣装系 Config の live tune を一元購読し次フレーム coalesce 反映 |
+| `MagicaClothRebuilder` | Bottoms swap 後の skirt 物理 cloth を target に再 build |
+| BreastFlatten 補正系 | 胸 flatten / 物理倍率（要約のみ。詳細は spoke） |
+| `*OverrideStore` ×5 | Costume / Panties / Stocking / Bottoms / Tops の override 状態 + ExSave 永続化 |
+| `CostumeChangerPatch` / `TopsPreloadFallbackPatch` | `Preload` フック（override 注入 / "Already loaded" 経路の Apply 補完） |
+| Wardrobe UI / 履歴 / Live patches | F7 パネルと履歴ガード |
+| その他のパッチ / helper | Panties alt-slot / Stocking NRE ガード / KneeSocks 等 |
+
 ### BottomsLoader / TopsLoader
 
-[`BottomsLoader.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/BottomsLoader.cs) (~730 行) /
-[`TopsLoader.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/TopsLoader.cs) (~1030 行)
+[`BottomsLoader.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/BottomsLoader.cs) (~775 行) /
+[`TopsLoader.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/TopsLoader.cs) (~1080 行)
 
 `MonoBehaviour` 派生 (Initialize で host GO に attach)。public/internal static API:
 
@@ -182,10 +237,41 @@ Loader 間で重複していたコードを集約した薄い層。
 |---------|------|
 | [`Internal/CharacterResolver.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/Internal/CharacterResolver.cs) | env と HoleScene の `m_characters` を順走査して `GameObject → CharacterHandle` を逆引き。同伴イベント等で env != HoleScene のとき HoleScene 側 PC を取りこぼさない |
 | [`Internal/CostumeMeshSwapper.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/Internal/CostumeMeshSwapper.cs) | donor SMR の `sharedMesh` / `bones` (リマップ) / `sharedMaterials` を target SMR に swap する共通 helper。`_trp` 系は強制 enable を skip |
+| [`Internal/CostumeTypeHelper.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/Internal/CostumeTypeHelper.cs) | `CostumeType.IsFullBodyCostume()` 拡張。SwimWear / Bunnygirl / 分離型でない DLC を full-body 衣装として一括判定 (blacklist: DLC02/03/04/05/07/08 は Tops/Bottoms 分離型で除外、未把握 DLC は安全側で full-body 扱い)。target の additive mode 判定 / donor 拒否に使用 |
 | [`Internal/DonorPreloadCache.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/Internal/DonorPreloadCache.cs) | `DonorPreloadCache<TEntry>` 汎用 cache。host root / in-flight task / (donor, costume) → entry の 3 役を 1 クラスに集約。Loader が `BuildDonorEntry` delegate を渡して使う |
 | [`Internal/DonorPreloadRegistry.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/Internal/DonorPreloadRegistry.cs) | 全 Loader の `IsHostParent` を集約。新 Loader を追加するたびに or で並べる重複を構造的に排除 |
 | [`Internal/OverrideStorePersistence.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/Internal/OverrideStorePersistence.cs) | 各 OverrideStore の ExSave Read/Write を共通化。rehydrate 失敗時は `s_rehydrateFailed=true` で write を抑止して破損データから保護 |
-| [`Internal/SmrSnapshot.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/Internal/SmrSnapshot.cs) | `SmrSnapshot` struct + `SmrSnapshotStore` 静的 dict。`(SnapshotKind, instanceId, smrKind, isInjected)` を主キーに `OriginalActive` / `OriginalEnabled` / `OriginalMesh` / `OriginalBones` / `OriginalMaterials` / `InjectedGo` を保持 |
+| [`Internal/SmrSnapshot.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/Internal/SmrSnapshot.cs) | `SmrSnapshot` struct + `SmrSnapshotStore` 静的 dict。`(SnapshotKind, instanceId, smrKind, isInjected)` を主キーに `OriginalActive` / `OriginalEnabled` / `OriginalBones` / `OriginalMaterials` / `InjectedGo` を保持。sharedMesh の native は `NativeSmrRegistry` が単一権威 (Phase 6 完了) |
+| [`Internal/NativeSmrRegistry.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/Internal/NativeSmrRegistry.cs) | `(character, SMR) → native sharedMesh` の単一権威。setup() Postfix 多重 patch の実行順依存を解消し、「Capture 時に transient clone を native として焼く」クラスの bug を構造的に排除する。下記 §NativeSmrRegistry 参照 |
+
+#### NativeSmrRegistry の規約
+
+`Internal/NativeSmrRegistry.cs` (~175 行) は SMR の native sharedMesh を集中管理する。Phase 1-6 完了で `SmrSnapshot.OriginalMesh` を撤廃し、SMR の native sharedMesh は本 Registry の **単一権威**。
+
+**規約 (Invariant)**: 全 MOD cloner / Capture サイトは、SMR.sharedMesh を MOD 由来 Mesh (clone / resolved / push / swap) に差し替える前に必ず `Internal.NativeSmrRegistry.GetOrCapture(character, smr)` を呼ぶ。最初に呼ぶ MOD 経路が native を確定する (= addressables stable な setup() ロード時 sharedMesh)。後続の呼出は同一参照を返す (idempotent)。
+
+**Restore**: `smr.sharedMesh = Internal.NativeSmrRegistry.TryGet(smr)` で native へ戻す。Registry が fake-null/未登録の場合は null 代入で SMR 非描画 (元から null と同等の意図動作)。
+
+**規約違反検出**: `s_knownModSuffixes` (`_breastshift` / `_breastflat` / `_distpres` / `_transplanted` / `_offset` / `_resolved`) を持つ Mesh の native 登録試行で `PatchLogger.LogError` + stack trace。dev / debug 時の入れ忘れ検出網。
+
+**現行の GetOrCapture 呼出箇所** (規約遵守経路):
+
+| 呼出点 | 対象 SMR | 役割 |
+|---|---|---|
+| `TopsLoader.ApplySmrPhase` (a)(b)(c) + additive inject | `mesh_costume*` 各 SMR | donor swap / inject / hide 前 |
+| `TopsLoader.ApplySwimWearBottomsPhase` (a)(b)(c) | SwimWear donor SMR | 同上 |
+| `TopsLoader.ApplyDistancePreservePhase` | distance preserve 対象 SMR | resolved 焼込前 |
+| `TopsLoader.ApplySkinUpperPhase` | `mesh_skin_upper` | Babydoll swap 前 |
+| `BottomsLoader.ApplySmrPhase` (a)(b)(c) + additive inject | `mesh_costume_skirt*` 等 | 同 Tops |
+| `BottomsLoader.ApplySkinUpperBabydollPhase` | `mesh_skin_upper` | BreastFlatten 統合 Babydoll swap 前 |
+| `BreastClothWeightShifter.ApplyToSmr` | `mesh_costume*` cloth | weight shift clone 前 |
+| `BreastFlattenApplier.ApplyOverlay` 冒頭 | `mesh_skin_upper` | flatten 先発で後段が clone を native 誤認するのを防ぐ（註1） |
+| `SkinShrinkCoordinator.RefreshOne` 冒頭 | `mesh_skin_upper` / `mesh_skin_lower` | Babydoll swap が gate skip された経路の構造的カバー（註2） |
+
+> 註1: HarmonyX の patch 実行順が B<T（BreastFlatten が Tops/BottomsLoader より先発）のため、先に native を確定しておかないと後段 Loader が flatten clone を真 native と誤認する。
+> 註2: `ShouldSwapSkinForFlatten` 等のガードで Tops/BottomsLoader 側の Babydoll swap が skip された経路でも、ここで `GetOrCapture` して真 native を押さえる。
+
+新規 MOD 生成 Mesh を追加する場合は `Mesh.name = base.name + "_<suffix>"` で命名し `s_knownModSuffixes` に追加すること。新規に sharedMesh を mutate する経路を追加する場合は上記表に追記し、対応する `GetOrCapture` 呼出を入れること。
 
 ### BoneGrafter
 
@@ -202,14 +288,14 @@ donor SMR の `bones[]` に含まれる固有名 (`L_skirtA1_SW_skinJT` 等) を
 
 **per-loader isolation**: graft した骨には `GraftedBoneMarker.OwnerTag = "BottomsLoader"` または `"TopsLoader"` が付く。Bottoms/Tops 同時適用時に互いの clone を破壊しないよう、`ResolveAndGraft` は別 owner subtree を探索対象から除外する。
 
-`DestroyGrafted(character, ownerTag)` は marker 一致の subtree のみ破棄。`SetParent(null)` で先 detach してから `Destroy` する (Unity の Destroy は frame 末で走るため、その前に親子関係から外しておかないと次の Apply で同じ subtree を二重に「graft 済み」と誤検出する罠がある)。
+`DestroyGrafted(character, ownerTag)` は marker 一致の subtree のみ破棄する。`Destroy` は frame 末で遅延実行されるため、先に `SetParent(null)` で detach しておく。さもないと同フレーム内の次の Apply が破棄予定の subtree を「graft 済み」と誤検出し、新規 graft を skip してしまう。
 
 ### MeshDistancePreserver
 
-[`MeshDistancePreserver.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/MeshDistancePreserver.cs) (~1000 行)
+[`MeshDistancePreserver.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/MeshDistancePreserver.cs) (~1215 行)
 
 Tops 移植専用。donor 服が donor 側 Babydoll skin にめり込んでいる箇所を **target skin に対して同じ距離関係になるように** 補正する。
-`Preserve(donorCostumeSmr, donorSkinSmrs, targetSkinSmrs, maxNeighborDist, minOffset, skinSampleRadius, weightFalloffOuter, logTag)` の 4 パス:
+`Preserve(donorCostumeSmr, donorSkinSmrs, targetSkinSmrs, maxNeighborDist, minOffset, skinSampleRadius, weightFalloffOuter, smoothIterations, smoothStrength, breastPushOut, cleavageShrink, cleavageWidth, logTag)`。引数は役割ごとに整理すると ① SMR（donor 服 / donor skin / target skin）② 距離・サンプル系（`maxNeighborDist` / `minOffset` / `skinSampleRadius` / `weightFalloffOuter`）③ 平滑化系（`smoothIterations` / `smoothStrength`）④ breast / cleavage 系（`breastPushOut` / `cleavageShrink` / `cleavageWidth`、詳細は spoke）⑤ `logTag`。処理は 4 パス:
 
 | Pass | 目的 |
 |------|------|
@@ -222,7 +308,7 @@ Tops 移植専用。donor 服が donor 側 Babydoll skin にめり込んでい�
 
 ### SkinShrinkCoordinator
 
-[`SkinShrinkCoordinator.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/SkinShrinkCoordinator.cs) (~430 行)
+[`SkinShrinkCoordinator.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/SkinShrinkCoordinator.cs) (~460 行)
 
 Tops / Bottoms 双方の SkinShrink (target skin SMR を cloth より内側へ push する補正) を **character 単位で統合** する。
 
@@ -241,19 +327,34 @@ public API:
 | `RegisterTops(character, clothSmrs, push, falloffR, sampleR)` | Tops contribution を登録し RefreshOne |
 | `RegisterBottoms(character, clothSmrs, push, falloffR, sampleR)` | Bottoms contribution を登録し RefreshOne |
 | `UnregisterTops(character)` / `UnregisterBottoms(character)` | contribution を外し RefreshOne (残存 contribution で再 push) |
-| `RestoreSkinUpperToOriginal(character, skinUpperSmr)` | TopsLoader.Apply (d) 直前で snapshot 入口を sanitize |
+| `RebaseOriginalSkinUpper(character, stableMesh)` | OriginalSkinUpper を新 stable asset で同期 (Tops/BreastFlatten-Bottoms の swap/un-swap 連動) |
 | `InvalidateCache()` | Mesh cache 全破棄 (live tune 用) |
 | `RefreshAllByConfig()` | 全 entry を再 push (live tune handler) |
 | `ClearScene()` | scene unload 時の entry クリア (s_cache は保持) |
 
 実装の特徴:
 
-- **素 mesh 1 箇所管理**: per-character entry に `OriginalSkinUpper` / `OriginalSkinLower` を保持。Refresh 時は両 skin SMR を素状態に rewind してから contribution を順次 push する (Tops → Bottoms 順)
-- **Tops 有無で skin_upper の素が遷移**: Tops 有 = target Babydoll asset / Tops 無 = target 元 costume asset。`UnregisterTops` 後の再 Register で素を再捕捉する
+- **素 mesh 1 箇所管理**: per-character entry に `OriginalSkinUpper` / `OriginalSkinLower` を保持 (= `RefreshOne` の rewind 先となる mutable な現 base mesh)。Refresh 時は両 skin SMR を素状態に rewind してから contribution を順次 push する (Tops → Bottoms 順)
+- **Registry との関係 (1)**: `OriginalSkinUpper`（Coordinator 側の mutable な現 base。swap 状態で遷移し、Tops 有 = target Babydoll asset / Tops 無 = target 元 costume asset）と、`NativeSmrRegistry` の native（session 不変な真 native = target 元 skin_upper）は **別概念で並存** する
+- **Registry との関係 (2)**: `RefreshOne` 冒頭で skin SMR の `GetOrCapture` を呼び、Tops/BottomsLoader 側の Babydoll swap が gate skip された経路でも真 native を確定する (Phase 5+6 完了)
+- **Tops 有無で skin_upper の素が遷移**: `UnregisterTops` 後の再 Register で `OriginalSkinUpper` を再捕捉する (Registry の真 native は session 不変、Coordinator の `OriginalSkinUpper` のみ遷移)
 - **face/eye anchor 集約**: skin push の falloff anchor として `mesh_face` / `mesh_eye` 系の頂点を採用。waist 縫い目で push 量が anchor 距離 0 になる問題を回避 (Bunnygirl 等で face SMR 不在なら skin 系 anchor に fallback)
-- **API 契約**: `UnregisterTops` 呼出前に呼出元は `mesh_skin_upper.sharedMesh` を target 元 costume asset に戻し終えていること (`*Loader.RestoreFor` 末尾で呼ぶのはこの前提を満たす)
+- **API 契約**: `UnregisterTops` 呼出前に呼出元は `mesh_skin_upper.sharedMesh` を target 元 costume asset (= `NativeSmrRegistry.TryGet(smr)`) に戻し終えていること (`*Loader.RestoreFor` 末尾で呼ぶのはこの前提を満たす)
 
 実 push は cloth SMR ごとに `MeshPenetrationResolver.Resolve` を呼び、結果 Mesh を `s_cache` ((skin Mesh, donor Mesh, push, falloffR, sampleR, srcTag, kindTag)) で deduplicate する。
+
+### CostumeReflectionCoordinator
+
+[`CostumeReflectionCoordinator.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/CostumeReflectionCoordinator.cs)
+
+衣装系 Config (`*BreastFlatten` ×6 / `BreastFlattenSmooth*` / `DistancePreserveSmooth*` / `Tops*` / `Bottoms*` SkinShrink / `TopsAdditiveBreastPushOut`) の `ConfigEntry.SettingChanged` を **一元購読する単一窓口** (`internal sealed MonoBehaviour`、host = Plugin GameObject)。
+
+旧来は `BreastFlattenApplier` / `TopsLoader` / `BottomsLoader` / `BreastClothWeightShifter` の 4 ハンドラに散在し、同一 `*BreastFlatten` を 3 クラスが購読して購読順依存だった。本クラスがそれらを置換する。
+
+- **coalesce**: 変更された config の影響 CharID を per-CharID dirty set + `CacheFlags` (Proxy / DistancePreserve / SkinShrink) に積み、`LateUpdate` → `Flush` で **次フレーム 1 回** にまとめて反映 (連続スライダー操作で多重 Apply しない)
+- **cache invalidation**: `CacheFlags` 単位で `BreastFlattenApplier.InvalidateProxyCache` / `TopsLoader.InvalidateDistancePreserveCache` / `SkinShrinkCoordinator.InvalidateCache + RefreshAllByConfig` を OR 集約で呼ぶ
+- **反映の canonical 順** (`ReflectChar`): `BottomsLoader.ApplyDirectly → TopsLoader.ApplyDirectly`、pure-native は `BreastFlattenApplier.Refresh`。Bottoms-only override は `BottomsLoader.Apply` が cloth weight-shift を呼ばないため本クラスが `BreastClothWeightShifter.ApplyFor` で補完する
+- **対象外**: `*BreastJiggle` / `*BreastInertia` (物理倍率) は `BreastClothTuner` が自前 `OnConfigChanged` で即時反映する (mesh 再生成不要なため統合しない)
 
 ### MagicaClothRebuilder
 
@@ -280,6 +381,23 @@ public API:
   - 同名 GO 無 / 親 bone あり → `InjectColliderGo` で新規 GO 生成 + AddComponent、`Marker(DestroyGameObject=true)` 付与。Restore で GO ごと destroy
 - **OnDisable 副作用回避 (`SafeDestroyPreservingSmrState`)**: Destroy 前に SMR state 保存 → Destroy 後に再適用 (`OnDisable` の `RenderData.SwapOriginalMesh` 副作用補正)
 - **snapshot**: `s_snapshots[(InstanceId, SkirtGoName)] = (SerData, SerData2, SrcRenderers, CreatedByMod)` で復元用。`CreatedByMod=true` は `TryCreateSkirtCloth` 経路で、Restore 時に GameObject ごと destroy
+
+### BreastFlatten 補正系
+
+> **詳細は spoke [costume-changer-breast.md](costume-changer-breast.md)。** 本系は分量が大きいため分離した。
+
+キャラごとに **胸サイズを縮める (flatten)** + **flatten 時の skin/cloth motion 非対称を解消** + **Babydoll swap 時の腰継ぎ目 conform** + **胸物理 (MagicaCloth) を倍率調整** する機構の集合:
+
+| コンポーネント | 役割 (要約) |
+|--------------|------------|
+| `BreastFlattenApplier` | `mesh_skin_upper` を eff 重み Laplacian relaxation で flatten + breast1 weight を `Spine3` へ移送。pure-native は Babydoll swap → `PushSkinUnderCloth` → flatten |
+| `BreastClothWeightShifter` | cloth (`mesh_costume*`) の breast1 weight 再配分。native は頂点 flatten も (`FlattenClonedMesh` 共用)、移植 cloth は距離保存済なので weight のみ |
+| `BreastWeightShiftMath` | weight 再配分の共有純算術 (skin / cloth で motion 一致) |
+| `SkinUpperWeightConformer` | Babydoll swap 後の腰継ぎ目帯 boneWeight を native へ blend (純関数、breast 域は不変) |
+| `BreastClothTuner` | 胸 MagicaCloth の Jiggle / Inertia 倍率 (F9 即時反映) |
+| `BreastFlattenSetupPatch` | 素キャラ `setup` Postfix の適用エントリ |
+
+hub 側で関係する主要点: distance-preserve は flatten 済 proxy SMR (`GetFlattenedReferenceSmr`) 基準（§MeshDistancePreserver）、Babydoll swap / push の所有は §SkinShrinkCoordinator、native 権威は §NativeSmrRegistry、live tune は §CostumeReflectionCoordinator が一元購読。Config (`*BreastFlatten` / `BreastFlattenSmooth*` / `BreastFlattenCleavage*` / `SkinUpperSeamConform*` / `*BreastJiggle` / `*BreastInertia`) は spoke と [configs.md](configs.md) 参照。
 
 ### OverrideStore × 5
 
@@ -324,7 +442,7 @@ flag=false 経路 (Unload 直後 + 非同期 Load) は `m_chara==null` で skip 
 
 ### Wardrobe UI / 履歴 / Live patches
 
-[`UI/CostumePickerController.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/UI/CostumePickerController.cs) — F7 hotkey、CharacterHandle 取得、5 タブ (Costume / Panties / Stocking / Bottoms / Tops) のロジック、各 Store への適用、Apply トリガ。
+[`UI/CostumePickerController.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/UI/CostumePickerController.cs) — F7 hotkey、CharacterHandle 取得、5 タブ (Costume / Panties / Stocking / Bottoms / Tops) のロジック、各 Store への適用、Apply トリガ。Tops / Bottoms タブの donor 衣装は閲覧済み (`*ViewHistory` に記録済) のもの、または既存 override 済の (donor, costume) 組合せ (履歴未蓄積でも grandfather) のみ選択可。
 
 [`UI/CostumePickerView.cs`](../BunnyGarden2FixMod/Patches/CostumeChanger/UI/CostumePickerView.cs) — UI Toolkit (UIDocument) ベースの View。partial 分割:
 
@@ -356,35 +474,11 @@ flag=false 経路 (Unload 直後 + 非同期 Load) は `m_chara==null` で skip 
 
 ## 4. 設定値 (Configs)
 
-[`Configs.yaml`](../BunnyGarden2FixMod/Configs.yaml) → [`Generated/Configs.g.cs`](../BunnyGarden2FixMod/Generated/Configs.g.cs) に自動生成。
-`F9` で live tune パネル表示、変更は即時反映 (Tops は `OnDistancePreserveParamChanged` / Bottoms は `OnBottomsSkinShrinkParamChanged` で同フレーム再 Apply、SkinShrink 系は `SkinShrinkCoordinator.InvalidateCache + RefreshAllByConfig`)。
+衣装系 Config の **キー一覧・既定値・範囲・ユーザー向け説明は [`configs.md`](configs.md)**（`Configs.yaml` から自動生成）にまとまっている。値の重複記載を避けるため、本節では Config の **反映経路** と **補正系の機能分類** のみ扱う。
 
-| キー | 既定値 | 範囲 | 用途 |
-|------|--------|------|------|
-| `CostumeChangerEnabled` | true | bool | 機能全体 ON/OFF (要再起動) |
-| `CostumeChangerShow` | F7 | hotkey | Wardrobe 表示 |
-| `RespectGameCostumeOverride` | true | bool | ゲーム指定衣装を override より優先するか |
-| `PersistCostumeOverrides` | true | bool | override 状態を ExSave に永続化するか |
-| `PantiesAltSlotMatch` | true | bool | 水着・バニーで下着表示 |
-| `PantiesAltSlotOverrideOnly` | true | bool | Mod で下着を指定したキャストのみ AltSlotMatch を適用 |
-| `DisableStockings` | false | bool | キャストのストッキングを非表示 |
-| `SwimWearStocking` | true | bool | 水着時の Stocking blendShape 移植 |
-| `StockingOffset` | 0 | 0〜0.01 | stocking cloth を skin より外側に最低距離維持 (m) |
-| `StockingSkinShrink` | 0.001 | 0〜0.01 | target.mesh_skin_lower を stocking より内側に push (m) |
-| `StockingSkinFalloffRadius` | 0.001 | 0〜0.01 | 上記 push の境界フェード (m) |
-| `StockingShapeFalloffRadius` | 0.001 | 0〜0.01 | skin_stocking blendShape delta の境界フェード (m) |
-| `TopsDistancePreserveRange` | 0.100 | 0.010〜0.500 | 上衣 距離保存検索範囲 (m) |
-| `TopsSkinMinOffset` | 0.005 | 0〜0.010 | 上衣 skin からの最小距離 (m) |
-| `TopsSkinSampleRadius` | 0.03 | 0〜0.100 | 上衣 skin サンプル半径 (m) |
-| `TopsSkinWeightFalloff` | 0.02 | 0〜0.050 | 上衣 skin weight 転送 falloff (m)。0 で無効 |
-| `TopsSkinShrink` | 0.005 | 0〜0.010 | target.mesh_skin_upper を tops より内側へ push (m) |
-| `TopsSkinShrinkFalloffRadius` | 0.001 | 0〜0.010 | 上記 push の境界フェード (m) |
-| `TopsSkinShrinkSampleRadius` | 0 | 0〜0.100 | tops 肌押込み cloth サンプル半径 (m)。0 で K=3 固定 |
-| `BottomsSkinShrink` | 0.005 | 0〜0.010 | target.mesh_skin_lower / mesh_skin_upper を skirt より内側へ push (m) |
-| `BottomsSkinShrinkFalloffRadius` | 0.001 | 0〜0.010 | 上記 push の境界フェード (m) |
-| `BottomsSkinShrinkSampleRadius` | 0.05 | 0〜0.1 | bottoms 肌押込み skirt サンプル半径 (m) |
-
-詳細な意味は [`configs.md`](configs.md) と `Configs.yaml` の `description:` 欄を参照。
+- **反映経路**: `F9` パネルで変更すると `CostumeReflectionCoordinator` が `*BreastFlatten` / `Tops*` / `Bottoms*` / 共有 smooth 系の `SettingChanged` を一元購読し、`LateUpdate` で次フレーム 1 回に coalesce して反映する（§3 CostumeReflectionCoordinator 参照）。`*BreastJiggle` / `*BreastInertia` のみ `BreastClothTuner.OnConfigChanged` が自前で即時反映する。
+- **追加方法**: 衣装系 Config の追加手順・YAML 形式はワークスペース直下 `README.md` と `Configs.yaml` を参照（`Plugin.cs` / `Generated/Configs.g.cs` は生成物で手編集不可）。
+- **キャラ別 Config**: `{Char}BreastFlatten` / `{Char}BreastJiggle` / `{Char}BreastInertia` の `{Char}` = `Kana` / `Rin` / `Miuka` / `Erisa` / `Kuon` / `Luna`（×6 char）。
 
 ### 4.1 Tops / Bottoms / Stocking 補正系の整理
 
@@ -463,6 +557,8 @@ Plugin.Awake
      ├─ KneeSocksLoader.Initialize(host)
      ├─ BottomsLoader.Initialize(host)   → DonorPreloadCache + Registry 登録
      └─ TopsLoader.Initialize(host)      → 同上
+ └─ BreastFlattenApplier / BreastClothTuner / BreastClothWeightShifter.Initialize(host)
+ └─ CostumeReflectionCoordinator.Initialize(host)  ← 衣装系 Config の SettingChanged を一元購読
 ```
 
 ### Apply (Wardrobe UI で donor 選択時)

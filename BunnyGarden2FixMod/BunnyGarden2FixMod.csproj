@@ -53,6 +53,7 @@
     <None Remove="Assembly\MessagePack.Annotations.dll" />
     <None Remove="Assembly\Unity.Addressables.dll" />
     <None Remove="Assembly\Unity.ResourceManager.dll" />
+    <None Remove="Assembly\MagicaClothV2.dll" />
   </ItemGroup>
 
   <ItemGroup>
@@ -119,6 +120,10 @@
     </Reference>
     <Reference Include="Unity.ResourceManager">
       <HintPath>Assembly\Unity.ResourceManager.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MagicaClothV2">
+      <HintPath>Assembly\MagicaClothV2.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

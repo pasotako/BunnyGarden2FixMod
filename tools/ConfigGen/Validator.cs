@@ -40,6 +40,18 @@ public static class Validator
             else if (e.Label.IndexOfAny(new[] { '\r', '\n' }) >= 0)
                 errors.Add($"[{e.Name}] label must be a single line (no CR/LF; CodeEmitter writes it as a one-line // comment)");
 
+            // group / section の値検証。永続化キー `section + U+001F + group` をカンマ結合保存するため、
+            // group を使うエントリの group・section いずれにも ',' / U+001F が混入するとキーが破損する。
+            if (!string.IsNullOrEmpty(e.Group))
+            {
+                if (e.Group.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+                    errors.Add($"[{e.Name}] group must be a single line (no CR/LF)");
+                if (e.Group.IndexOf(',') >= 0 || e.Group.IndexOf((char)0x1f) >= 0)
+                    errors.Add($"[{e.Name}] group must not contain ',' or U+001F (internal collapse-state key/separators)");
+                if (e.Section.IndexOf(',') >= 0 || e.Section.IndexOf((char)0x1f) >= 0)
+                    errors.Add($"[{e.Name}] section '{e.Section}' must not contain ',' or U+001F when entries use group (collapse-state key separators)");
+            }
+
             var validTypes = new[] { "bool", "int", "float", "enum", "key", "hotkey" };
             if (!validTypes.Contains(e.Type))
                 errors.Add($"[{e.Name}] Invalid type: {e.Type} (allowed: {string.Join(", ", validTypes)}). " +
@@ -145,6 +157,19 @@ public static class Validator
                         errors.Add($"[{e.Name}] ui.kind=keybinding must not specify enumType (Key + ControllerButton are fixed)");
                 }
             }
+        }
+
+        // group は連続ラン前提（SettingsView が連続する同一 group のみ 1 グループにまとめる）。
+        // 同一 (section, group) が非連続に宣言されると UI 上 2 ヘッダーに分裂するため検出する。
+        var groupRuns = entries
+            .Select((e, i) => (e, i))
+            .Where(x => !string.IsNullOrEmpty(x.e.Group))
+            .GroupBy(x => (x.e.Section, x.e.Group));
+        foreach (var g in groupRuns)
+        {
+            var indices = g.Select(x => x.i).ToList();
+            if (indices.Max() - indices.Min() + 1 != indices.Count)
+                errors.Add($"[{g.Key.Section}/{g.Key.Group}] group entries must be declared contiguously (found non-consecutive declarations)");
         }
 
         return errors;

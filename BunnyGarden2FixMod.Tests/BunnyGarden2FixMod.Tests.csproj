@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- Windows の dotnet.exe でビルドするため Windows パス (C:/...) で指定する。WSL パス (/mnt/c/...) は解決不可。 -->
+    <UnityManagedDir Condition="'$(UnityManagedDir)' == ''">C:/Program Files (x86)/Steam/steamapps/common/BUNNY GARDEN 2/BUNNY GARDEN 2_Data/Managed</UnityManagedDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <!-- dll 不在時は CS0246 等の遠回りなエラーになるため、明示メッセージで原因を即特定できるようにする。 -->
+  <Target Name="CheckUnityManagedDir" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(UnityManagedDir)/UnityEngine.CoreModule.dll')"
+           Text="UnityEngine.CoreModule.dll が見つかりません: $(UnityManagedDir)。ゲームの Managed フォルダのパスを -p:UnityManagedDir=&quot;C:/.../*_Data/Managed&quot; で指定してください。" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(UnityManagedDir)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    テスト対象の純粋ソースは Compile link で取り込む（BepInEx/Harmony 依存を避けるため本体 dll 参照はしない）。
+    リンクするソースは UnityEngine + System のみに依存する純関数であること（実機 CoreModule で実行時解決）。
+    下記はサンプル: 空間索引ユーティリティ SpatialGridIndex を取り込み SpatialGridIndexTests でテストする。
+  -->
+  <ItemGroup>
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/SpatialGridIndex.cs" Link="Linked/SpatialGridIndex.cs" />
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/SkinUpperWeightConformer.cs" Link="Linked/SkinUpperWeightConformer.cs" />
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/BreastWeightShiftMath.cs" Link="Linked/BreastWeightShiftMath.cs" />
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/MeshDisplacementSmoother.cs" Link="Linked/MeshDisplacementSmoother.cs" />
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/BreastClothLowerFadeMath.cs" Link="Linked/BreastClothLowerFadeMath.cs" />
+  </ItemGroup>
+
+</Project>

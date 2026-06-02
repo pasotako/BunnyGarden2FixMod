@@ -68,7 +68,7 @@ internal static class MeshSurfaceOffsetAdjuster
         long gridMs = sw.ElapsedMilliseconds - gridStart;
 
         var newMesh = Object.Instantiate(donorMesh);
-        newMesh.name = donorMesh.name + "_offset";
+        newMesh.name = donorMesh.name + Internal.ModMeshSuffixes.Offset;
 
         // 内側に深く食い込んでいる頂点（reference 法線が逆向き、または別パーツの裏面に
         // 最近傍が引っかかった等）を「外側へ反転 push」して破綻させないためのガード。

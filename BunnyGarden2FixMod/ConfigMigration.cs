@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using BepInEx.Configuration;
 using BunnyGarden2FixMod.Utils;
 using HarmonyLib;
@@ -81,30 +83,78 @@ public static class ConfigMigration
         new(new("CostumeChanger", HotkeyConfig.GamepadKey("Show")), new("Hotkey", HotkeyConfig.GamepadKey("Show"))),
     ];
 
+    private readonly struct ResetEntry(int version, ConfigDefinition def)
+    {
+        public int Version { get; } = version;
+        public ConfigDefinition Def { get; } = def;
+    }
+
+    // 既定値が変わったキーを「一回だけ」既定へリセットするための定義。
+    // 各エントリの Version より stored が小さいときだけ適用する。
+    // 今後 既定値を変えたら、新しい Version を採番してこの配列に1行追加するだけでよい。
+    // 【採番規約】新エントリの Version は必ず既存の最大 Version より大きくすること。
+    //   marker は常に最大 Version で上書きされるため、中間/過去番号を差し込むと
+    //   既存ユーザー（stored=最大）に追い越されて永久に適用されない。
+    // 既定値の literal は持たず、orphaned から該当キーを削除して BindAll に既定値で bind させる。
+    private static readonly ResetEntry[] ResetToDefaultMigrations =
+    [
+        // v1: TopsSkinShrink/BottomsSkinShrink 新既定
+        new(1, new("CostumeChanger", "TopsSkinShrink")),
+        new(1, new("CostumeChanger", "BottomsSkinShrink")),
+    ];
+
+    // 値マイグレーション用の現在スキーマバージョン = 配列の最大 Version（配列が空なら 0）。
+    // 配列に高い Version を追加すれば自動的に繰り上がる（手動インクリメント不要）。
+    private static readonly int CurrentSchemaVersion =
+        ResetToDefaultMigrations.Select(e => e.Version).DefaultIfEmpty(0).Max();
+
+    // マイグレーション進捗を記録する内部マーカー。
+    // 【不変条件】このキーは絶対に Configs.yaml / BindAll に載せないこと。
+    // bind すると Bind<T> が OrphanedEntries から pull+remove してしまい、orphaned 永続前提が壊れる。
+    // bind しない限り Save() の Entries.Concat(OrphanedEntries) で .cfg [Migration] セクションに恒久保持される。
+    private static readonly ConfigDefinition SchemaVersionDef = new("Migration", "SchemaVersion");
+
     public static void Migrate(ConfigFile config)
     {
         PatchLogger.LogInfo($"[{nameof(ConfigMigration)}] 設定の移行を開始します");
         var previousSaveOnConfigSet = config.SaveOnConfigSet;
         config.SaveOnConfigSet = false;
 
-        ArrayMigration(config);
-        RemoveObsoleteKeys(config);
+        // Save() の I/O 例外や早期 return でも SaveOnConfigSet を必ず復元する（リークすると
+        // 以後の設定変更が .cfg に保存されない分かりにくい二次障害を生むため）。
+        try
+        {
+            var orphanedEntries = GetOrphanedEntries(config);
+            if (orphanedEntries == null)
+            {
+                PatchLogger.LogWarning(
+                    $"[{nameof(ConfigMigration)}] " +
+                    $"移行のための「OrphanedEntries」にアクセスできませんでした。移行はスキップされます");
+                return;
+            }
 
-        config.Save();
-        config.SaveOnConfigSet = previousSaveOnConfigSet;
-        PatchLogger.LogInfo($"[{nameof(ConfigMigration)}] 設定の移行が完了しました");
+            // 論理順: リネーム → 値変換 → 削除。
+            ArrayMigration(orphanedEntries);
+            ValueMigrations(orphanedEntries);
+            RemoveObsoleteKeys(orphanedEntries);
+
+            config.Save();
+            PatchLogger.LogInfo($"[{nameof(ConfigMigration)}] 設定の移行が完了しました");
+        }
+        finally
+        {
+            config.SaveOnConfigSet = previousSaveOnConfigSet;
+        }
     }
 
-    private static void RemoveObsoleteKeys(ConfigFile config)
+    private static Dictionary<ConfigDefinition, string> GetOrphanedEntries(ConfigFile config) =>
+        (Dictionary<ConfigDefinition, string>)
+        AccessTools.PropertyGetter(typeof(ConfigFile), "OrphanedEntries").Invoke(config, null);
+
+    private static void RemoveObsoleteKeys(Dictionary<ConfigDefinition, string> orphanedEntries)
     {
         // BepInEx の OrphanedEntries から廃止キーを削除する。
         // OrphanedEntries に存在しない場合（すでにアクティブなキーとして登録済みなど）はスキップ。
-        var orphanedEntries =
-            (Dictionary<ConfigDefinition, string>)
-            AccessTools.PropertyGetter(typeof(ConfigFile), "OrphanedEntries").Invoke(config, null);
-
-        if (orphanedEntries == null) return;
-
         foreach (var key in ObsoleteKeys)
         {
             if (!orphanedEntries.Remove(key)) continue;
@@ -112,21 +162,9 @@ public static class ConfigMigration
         }
     }
 
-    private static void ArrayMigration(ConfigFile config)
+    private static void ArrayMigration(Dictionary<ConfigDefinition, string> orphanedEntries)
     {
         // これは少しハッキーですが、エントリの移行と古いエントリの実際の削除を処理する最善の方法です
-        var orphanedEntries =
-            (Dictionary<ConfigDefinition, string>)
-            AccessTools.PropertyGetter(typeof(ConfigFile), "OrphanedEntries").Invoke(config, null);
-
-        if (orphanedEntries == null)
-        {
-            PatchLogger.LogWarning(
-                $"[{nameof(ConfigMigration)}] " +
-                $"移行のための「OrphanedEntries」にアクセスできませんでした。移行はスキップされます");
-            return;
-        }
-
         foreach (var entry in Migrations)
         {
             // 古いエントリが存在しない場合、それはすでに移行されているか、
@@ -144,8 +182,35 @@ public static class ConfigMigration
 
             orphanedEntries.Add(entry.NewDef, oldValue);
             PatchLogger.LogInfo(
-                $"[{nameof(ConfigMigration)}]" +
+                $"[{nameof(ConfigMigration)}] " +
                 $"新しい設定エントリに移行しました: {entry.NewDef} = {oldValue}");
         }
+    }
+
+    // スキーマバージョンゲート付きの「一回だけ」移行。bind 前なのでアクティブキーも orphaned に入っている。
+    // stored より新しい Version のエントリだけを適用する（差分適用）。
+    private static void ValueMigrations(Dictionary<ConfigDefinition, string> orphanedEntries)
+    {
+        var stored = 0;
+        if (orphanedEntries.TryGetValue(SchemaVersionDef, out var storedStr))
+            // parse 失敗（手書きで壊された値など）は stored=0 に落とす（=全移行を再適用）。
+            int.TryParse(storedStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out stored);
+
+        foreach (var entry in ResetToDefaultMigrations)
+        {
+            if (entry.Version <= stored) continue;
+            ResetToDefault(orphanedEntries, entry.Def);
+        }
+
+        // 新規インストール（orphaned 空）でも必ずマーカーを刻む。以後ゲートが効く。
+        orphanedEntries[SchemaVersionDef] = CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture);
+    }
+
+    // orphaned から該当キーを削除し、後段 BindAll が Configs.yaml の既定値で bind するようにする。
+    // キーが無ければ（既に既定 / 未保存）無音 skip。
+    private static void ResetToDefault(Dictionary<ConfigDefinition, string> orphanedEntries, ConfigDefinition def)
+    {
+        if (!orphanedEntries.Remove(def)) return;
+        PatchLogger.LogInfo($"[{nameof(ConfigMigration)}] 既定値にリセットしました: {def}");
     }
 }

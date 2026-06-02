@@ -5,6 +5,8 @@
 # label は必須・name 直下。生成コードの XML doc コメントと .cfg description の 1 行目に使われる。
 # description は label の補足として書く（label と重複する見出し的記述は避ける）。
 # type=hotkey は controllerDescription を任意指定でき、Gamepad エントリのみに追記される。
+# 文言の統一規約: 単位は label=「(m)」/ description=「（メートル）」。無効状態は「0 で無効。」「OFF で従来動作。」(句点付き)。
+# description の本文には内部実装語 (C# フィールド名・型名・メソッド名) を避け、平易な語で書く（必要なら最後に「実装メモ:」で 1 行補足）。
 
 - section: Graphics
   name: 解像度・フレームレート・グラフィック
@@ -241,12 +243,10 @@
       default: false
       description: |
         チェキ（撮影写真）の保存解像度を Size で指定した値に変更します。false で本体既定（320x320）。
-        互換性: 本体セーブには常に 320x320 版が保存されるため、MOD を外しても主セーブは破損しません。
-        高解像度版は MOD 独自のサイドカーファイル（主セーブ + .exmod）に格納します。
-        保存先は `BepInEx/data/net.noeleve.BunnyGarden2FixMod/`（Steam Cloud Save 対象外）。
-        PC 移行時はこのフォルダを手動でコピーしてください。
-        スロット対応: セーブスロット単位で高解像度データを分離管理します。
-        副作用: 高解像度化でメモリ／セーブサイズが増加します（1024 時: 約 48MB/12 枚）。
+        - 互換性: 本体セーブには常に 320x320 版が保存されるため、MOD を外しても主セーブは破損しません。高解像度版は MOD 独自のサイドカーファイル（主セーブ + .exmod）に格納します。
+        - 保存先: `BepInEx/data/net.noeleve.BunnyGarden2FixMod/`（Steam Cloud Save 対象外）。PC 移行時はこのフォルダを手動でコピーしてください。
+        - スロット対応: セーブスロット単位で高解像度データを分離管理します。
+        - 副作用: 高解像度化でメモリ／セーブサイズが増加します（1024 時: 約 48MB/12 枚）。
       ui:
         kind: toggle
 
@@ -322,7 +322,7 @@
       label: キャスト出勤順序変更（バー入店前に F1 で編集）
       type: bool
       default: false
-      description: F1 で編集モードを開始し、数字キー（1〜5）でキャストを選択・入れ替えます。
+      description: F1 で編集モードを開始し、数字キー（1〜6）でキャストを選択・入れ替えます。
       ui:
         kind: toggle
 
@@ -353,9 +353,9 @@
           ★ : 好感度UP（正解）
           ▼ : 好感度DOWN（酔い選択肢だが現在の状況では効果なし）
         【ドリンク・フード】アイテムの背景色が変化します。
-          緑 : キャストのお気に入り（AddFavoriteLikability > 0）
+          緑 : キャストのお気に入り
           黄 : 今日の旬アイテム（ボーナスあり）
-          赤 : キャストが嫌いなもの（AddFavoriteLikability < 0）
+          赤 : キャストが嫌いなもの
       ui:
         kind: toggle
 
@@ -394,6 +394,7 @@
   configs:
     - name: CostumeChangerEnabled
       label: 衣装変更を有効化（要再起動）
+      group: 基本設定
       key: Enabled
       type: bool
       default: true
@@ -405,6 +406,7 @@
 
     - name: RespectGameCostumeOverride
       label: ゲーム指定衣装を優先
+      group: 基本設定
       type: bool
       default: true
       description: |
@@ -415,6 +417,7 @@
 
     - name: PersistCostumeOverrides
       label: 衣装変更状態を保存する
+      group: 基本設定
       type: bool
       default: true
       description: |
@@ -426,6 +429,7 @@
 
     - name: SwimWearStocking
       label: 水着+ストッキング適用
+      group: 水着・ストッキング
       type: bool
       default: true
       description: |
@@ -434,6 +438,7 @@
 
     - name: StockingOffset
       label: ストッキング 押出し量 (m)
+      group: 水着・ストッキング
       type: float
       default: 0
       range: [0, 0.01]
@@ -447,6 +452,7 @@
 
     - name: StockingSkinShrink
       label: ストッキング 肌押込み量 (m)
+      group: 水着・ストッキング
       type: float
       default: 0.001
       range: [0, 0.01]
@@ -461,6 +467,7 @@
 
     - name: StockingSkinFalloffRadius
       label: ストッキング 肌押込み フェード半径 (m)
+      group: 水着・ストッキング
       type: float
       default: 0.001
       range: [0, 0.01]
@@ -474,6 +481,7 @@
 
     - name: StockingShapeFalloffRadius
       label: ストッキング 肌形状フェード半径 (m)
+      group: 水着・ストッキング
       type: float
       default: 0.001
       range: [0, 0.01]
@@ -487,6 +495,7 @@
 
     - name: TopsDistancePreserveRange
       label: 上衣 距離保存 検索範囲 (m)
+      group: 上衣 (別キャラ移植)
       type: float
       default: 0.100
       range: [0.010, 0.500]
@@ -501,6 +510,7 @@
 
     - name: TopsSkinMinOffset
       label: 上衣 肌からの最小距離 (m)
+      group: 上衣 (別キャラ移植)
       type: float
       default: 0.005
       range: [0.0, 0.010]
@@ -515,6 +525,7 @@
 
     - name: TopsSkinSampleRadius
       label: 上衣 肌サンプル半径 (m)
+      group: 上衣 (別キャラ移植)
       type: float
       default: 0.03
       range: [0.0, 0.100]
@@ -529,6 +540,7 @@
 
     - name: TopsSkinWeightFalloff
       label: 上衣 肌 weight 転送 falloff (m)
+      group: 上衣 (別キャラ移植)
       type: float
       default: 0.02
       range: [0.0, 0.050]
@@ -542,10 +554,59 @@
         step: 0.001
         format: '{0:F3}'
 
+    - name: TopsAdditiveBreastPushOut
+      label: 重ね着時 胸 押し出し (m)
+      group: 上衣 (別キャラ移植)
+      type: float
+      default: 0.003
+      range: [0.0, 0.030]
+      description: |
+        水着など全身衣装に上着を重ね、かつ胸サイズを縮めた重ね着のときだけ効く設定です（メートル）。
+        重ねた上着の胸まわりを肌から離す向きに押し出し、胸が上着を突き抜けるのを防ぎます。
+        突き抜けが見える場合に少しずつ大きくしてください。0 で無効（従来どおり）。
+        通常の上下分かれた衣装では使われません（そちらは肌側の押し込みで補正）。
+        補正は距離保存の平滑化を通るため、押し出し量は設定値より小さく出ます
+        （設定値=実際の押し出し量ではありません）。突き抜けが消える値に合わせてください。
+      ui:
+        kind: slider
+        step: 0.001
+        format: '{0:F4}'
+
+    - name: DistancePreserveSmoothIterations
+      label: 距離保存 平滑化 反復回数
+      group: 上衣 (別キャラ移植)
+      type: int
+      default: 1
+      range: [0, 10]
+      description: |
+        距離保存で衣装を体型に追従させた際の補正量 (disp) を、衣装メッシュ上で近傍平均する反復回数です。
+        胸 flat 時の native 上着・別キャラ上衣の移植いずれにも効きます。
+        多いほど表面のガタつき (逆距離² サンプリングの高周波ノイズ) が滑らかになりますが、
+        増やしすぎると衣装のディテール (襞・カップの稜線) が鈍ります。0 で平滑化無効 (距離保存の生の結果)。
+      ui:
+        kind: slider
+        step: 1
+        format: '{0}'
+
+    - name: DistancePreserveSmoothStrength
+      label: 距離保存 平滑化 寄せ率
+      group: 上衣 (別キャラ移植)
+      type: float
+      default: 0.5
+      range: [0.0, 1.0]
+      description: |
+        距離保存 平滑化の 1 反復あたり近傍平均への寄せ率。0.0 で平滑化無効、1.0 で最大。
+        ガタつきが残るなら上げ、衣装のディテールが鈍るなら下げます。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
     - name: TopsSkinShrink
       label: 上衣 肌押込み量 (m)
+      group: 上衣 (別キャラ移植)
       type: float
-      default: 0.005
+      default: 0
       range: [0, 0.01]
       description: |
         別キャラ上衣を当てたとき、肌が服を貫通する箇所を内側に押し込む距離です（メートル）。
@@ -557,6 +618,7 @@
 
     - name: TopsSkinShrinkFalloffRadius
       label: 上衣 肌押込み フェード半径 (m)
+      group: 上衣 (別キャラ移植)
       type: float
       default: 0.001
       range: [0, 0.01]
@@ -571,6 +633,7 @@
 
     - name: TopsSkinShrinkSampleRadius
       label: 上衣 肌押込み cloth サンプル半径 (m)
+      group: 上衣 (別キャラ移植)
       type: float
       default: 0.0
       range: [0, 0.1]
@@ -585,8 +648,9 @@
 
     - name: BottomsSkinShrink
       label: 下衣 肌押込み量 (m)
+      group: 下衣 (別キャラ移植)
       type: float
-      default: 0.005
+      default: 0.002
       range: [0, 0.01]
       description: |
         別キャラ下衣（スカート等）を当てたとき、肌がスカートを貫通する箇所を内側に押し込む距離です（メートル）。
@@ -599,6 +663,7 @@
 
     - name: BottomsSkinShrinkFalloffRadius
       label: 下衣 肌押込み フェード半径 (m)
+      group: 下衣 (別キャラ移植)
       type: float
       default: 0.001
       range: [0, 0.01]
@@ -613,6 +678,7 @@
 
     - name: BottomsSkinShrinkSampleRadius
       label: 下衣 肌押込み skirt サンプル半径 (m)
+      group: 下衣 (別キャラ移植)
       type: float
       default: 0.05
       range: [0, 0.1]
@@ -627,6 +693,7 @@
 
     - name: PantiesAltSlotMatch
       label: 水着・バニーガール衣装でも下着を表示
+      group: 下着・その他
       type: bool
       default: true
       description: |
@@ -636,7 +703,8 @@
         kind: toggle
 
     - name: PantiesAltSlotOverrideOnly
-      label: Mod で下着を指定したキャストのみ適用 (OFF で全員)
+      label: Mod で下着を指定したキャストのみ適用
+      group: 下着・その他
       type: bool
       default: true
       description: |
@@ -648,10 +716,486 @@
 
     - name: DisableStockings
       label: キャストのストッキング(パンスト)を非表示
+      group: 下着・その他
       type: bool
       default: false
       ui:
         kind: toggle
+
+    - name: SkinUpperSeamConform
+      label: 上半身肌の腰継ぎ目を元の体型に合わせる
+      group: 上半身肌 継ぎ目
+      type: bool
+      default: true
+      description: |
+        上着・水着・胸平坦化で上半身肌 (mesh_skin_upper) を共通体型(Babydoll)に差し替えたとき、
+        腰の継ぎ目だけ元の体型のボーン追従と位置に戻して、下半身肌との継ぎ目のズレ（動いたときの段差・
+        静的な隙間）を抑えます。腰回りでズレや隙間が出る場合は ON のままにしてください。OFF で従来動作。
+      ui:
+        kind: toggle
+
+    - name: SkinUpperSeamConformDist
+      label: 腰継ぎ目 conform 近接距離 (m)
+      group: 上半身肌 継ぎ目
+      type: float
+      default: 0.005
+      range: [0.001, 0.02]
+      description: |
+        上半身肌のうち、共通体型(Babydoll)の下半身肌との距離がこの値（メートル）以内の継ぎ目頂点だけを
+        元の体型のボーン追従へ戻します。胸など下半身肌から離れた部分は触らず平坦化を保ちます。
+        継ぎ目の段差が残る場合は少し大きくしてください。上半身肌の腰継ぎ目 conform が OFF のときは無効。
+      ui:
+        kind: slider
+        step: 0.001
+        format: '{0:F3}'
+
+- section: Breast
+  name: 胸 (サイズ・揺れ / 慣性)
+  header: |
+    ## 胸サイズ可変
+
+    キャストの胸を周囲の肌へ滑らかに沈めて小さく見せる機能です。flat 量 `amount` は `0.0` = 元のサイズ / `1.0` = 完全に平ら。0 のキャラは処理しません。
+
+    沈め方は近傍の肌との位置平均（平滑化）で、その強さを `SmoothRadius`（参照半径）/ `SmoothIterations`（反復回数）/ `SmoothStrength`（寄せ率）で決めます。**いずれかを 0 にすると `amount` を上げても平らになりません**（既定値で有効）。`SmoothRadius` は `amount` を大きくしたときの表面のブレも抑えます。
+
+    **反映タイミング**: F9 パネルで slider を動かすと即時反映されます（肌の平坦化を作り直し、別キャラ上衣の移植中ならその追従補正も同じフレームで再適用）。
+
+    **既知の制約**:
+    - 上着は平坦化する前の胸位置を基準に体型補正されるため、`amount` が大きいと上着が胸の位置で浮きます（肌だけ平らになり、上着・物理布はそのまま）。
+    - **`BreastWeightShift`（flat 揺れ抑制倍率）を既定の 0.8 より下げる** と、VIP シーン + 別キャラ上衣の移植が重なったとき、胸が大きく動くモーション中に上着が肌に追従しきれず「肌が上着を突き抜けて見える」ことがあります。`BreastWeightShift` を **0.8 以上**（既定）に保てば発生しません（`docs/costume-changer-pitfalls.md` #20 参照）。
+
+    ## 胸物理 (揺れ / 慣性)
+
+    胸の揺れ（MagicaCloth 物理）を、キャストごとに 2 軸の倍率で調整します。各倍率は `1.0`（既定）で標準のまま（変化なし）です。
+
+    - **Jiggle**（揺れ度）: 大きいほどよく揺れ（大振幅）、`0.0` で完全停止。小さいほど揺れにくくなります。
+    - **Inertia**（慣性）: 大きいほど慣性が強く、`0.0` で慣性を無視します。大きくしても一定値で頭打ちになります。
+
+    **反映タイミング**: F9 パネルで slider を動かすと即時反映されます。
+
+    > 実装メモ: Jiggle は MagicaCloth の `springPower` / `damping` を `baseline / 倍率`、Inertia は `worldInertia` を `baseline × 倍率` で書き換えます（Inertia は内部 `Clamp(0,1)` で頭打ち）。
+  configs:
+    - name: BreastFlattenSmoothRadius
+      label: 胸 flat smoothing 半径 (m)
+      group: 共通設定
+      type: float
+      default: 0.1
+      range: [0.0, 0.2]
+      description: |
+        胸を潰す Laplacian relaxation の近傍半径 (mesh-local m)。各頂点をこの半径内の頂点の平均位置へ寄せます。
+        大きいほど 1 反復で広く平均し速く平らになりますが処理負荷が増加します。0 で flatten 無効。
+      ui:
+        kind: slider
+        step: 0.005
+        format: '{0:F4}'
+
+    - name: BreastFlattenSmoothIterations
+      label: 胸 flat 反復回数
+      group: 共通設定
+      type: int
+      default: 4
+      range: [0, 5]
+      description: |
+        胸を潰す Laplacian relaxation の反復回数。回数を増やすほど深く沈んで平らになります。
+        0 で flatten 無効。SmoothRadius を近傍半径に使うため SmoothRadius=0 でも無効。
+        SmoothRadius が小さいと近傍を拾えず効きが弱くなります。
+      ui:
+        kind: slider
+        step: 1
+        format: '{0}'
+
+    - name: BreastFlattenSmoothStrength
+      label: 胸 flat 寄せ率
+      group: 共通設定
+      type: float
+      default: 0.8
+      range: [0.0, 1.0]
+      description: |
+        Laplacian relaxation の 1 反復あたり近傍平均への寄せ率。0.0 で flatten 無効、1.0 で最大。
+        実効強度は頂点ごとの flat 量 (amount×breast weight) で重み付けされ、胸領域外は不動。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: BreastFlattenCleavageShrink
+      label: 胸 flat 谷間沈め
+      group: 共通設定
+      type: float
+      default: 1.0
+      range: [0.0, 1.0]
+      description: |
+        BreastFlatten 時、左右の胸の谷間 (cleavage) で衣装が平らな body の上に浮くのを抑えます。
+        distance-preserve が保つ「元の丸い胸との距離」を谷間でのみ縮め、衣装を body へ引き下ろします。
+        0.0 で従来挙動（縮めない）、1.0 で谷間の衣装を肌へ最大まで沈めます。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: BreastFlattenCleavageWidth
+      label: 胸 flat 谷間幅
+      group: 共通設定
+      type: float
+      default: 1.5
+      range: [0.0, 1.5]
+      description: |
+        谷間沈めを効かせる左右の幅。胸の中心間隔に対する比率で、大きいほど胸寄りまで沈めます。
+        BreastFlattenCleavageShrink が 0 のときは無効。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: BreastFlattenLowerFade
+      label: 胸 flat 下半身衣装を保護
+      group: 共通設定
+      type: bool
+      default: true
+      description: |
+        全身が 1 枚メッシュの衣装 (水着・バニー等) で胸を潰すとき、下半身側の衣装が一緒に
+        変形するのを抑えます。腰のラインから下は元の形のまま据え置きます。OFF で従来動作。
+      ui:
+        kind: toggle
+
+    - name: BreastFlattenLowerFadeWidth
+      label: 胸 flat 下半身保護のフェード幅 (m)
+      group: 共通設定
+      type: float
+      default: 0.05
+      range: [0.0, 0.2]
+      description: |
+        下半身衣装の保護を腰のラインから上へどれだけの幅で滑らかに切り替えるか (mesh-local m)。
+        0 で腰のラインちょうどで二値的に切り替え。大きいほど境界がなだらかになります。
+        胸 flat 下半身衣装を保護が OFF のときは無効。
+      ui:
+        kind: slider
+        step: 0.005
+        format: '{0:F3}'
+
+    - name: KanaBreastFlatten
+      label: flat 量
+      group: 花奈
+      type: float
+      default: 0.0
+      range: [0.0, 1.0]
+      description: |
+        花奈 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: KanaBreastWeightShift
+      label: flat 揺れ抑制倍率
+      group: 花奈
+      type: float
+      default: 0.8
+      range: [0.0, 1.0]
+      description: |
+        花奈 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+        1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+        flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: KanaBreastJiggle
+      label: 揺れ度倍率
+      group: 花奈
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        花奈 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: KanaBreastInertia
+      label: 慣性倍率
+      group: 花奈
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        花奈 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: RinBreastFlatten
+      label: flat 量
+      group: 凜
+      type: float
+      default: 0.0
+      range: [0.0, 1.0]
+      description: |
+        凜 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: RinBreastWeightShift
+      label: flat 揺れ抑制倍率
+      group: 凜
+      type: float
+      default: 0.8
+      range: [0.0, 1.0]
+      description: |
+        凜 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+        1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+        flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: RinBreastJiggle
+      label: 揺れ度倍率
+      group: 凜
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        凜 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: RinBreastInertia
+      label: 慣性倍率
+      group: 凜
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        凜 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: MiukaBreastFlatten
+      label: flat 量
+      group: 美羽香
+      type: float
+      default: 0.0
+      range: [0.0, 1.0]
+      description: |
+        美羽香 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: MiukaBreastWeightShift
+      label: flat 揺れ抑制倍率
+      group: 美羽香
+      type: float
+      default: 0.8
+      range: [0.0, 1.0]
+      description: |
+        美羽香 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+        1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+        flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: MiukaBreastJiggle
+      label: 揺れ度倍率
+      group: 美羽香
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        美羽香 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: MiukaBreastInertia
+      label: 慣性倍率
+      group: 美羽香
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        美羽香 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: ErisaBreastFlatten
+      label: flat 量
+      group: 英梨紗
+      type: float
+      default: 0.0
+      range: [0.0, 1.0]
+      description: |
+        英梨紗 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: ErisaBreastWeightShift
+      label: flat 揺れ抑制倍率
+      group: 英梨紗
+      type: float
+      default: 0.8
+      range: [0.0, 1.0]
+      description: |
+        英梨紗 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+        1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+        flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: ErisaBreastJiggle
+      label: 揺れ度倍率
+      group: 英梨紗
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        英梨紗 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: ErisaBreastInertia
+      label: 慣性倍率
+      group: 英梨紗
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        英梨紗 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: KuonBreastFlatten
+      label: flat 量
+      group: 黒音
+      type: float
+      default: 0.0
+      range: [0.0, 1.0]
+      description: |
+        黒音 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: KuonBreastWeightShift
+      label: flat 揺れ抑制倍率
+      group: 黒音
+      type: float
+      default: 0.8
+      range: [0.0, 1.0]
+      description: |
+        黒音 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+        1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+        flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: KuonBreastJiggle
+      label: 揺れ度倍率
+      group: 黒音
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        黒音 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: KuonBreastInertia
+      label: 慣性倍率
+      group: 黒音
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        黒音 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: LunaBreastFlatten
+      label: flat 量
+      group: 瑠那
+      type: float
+      default: 0.0
+      range: [0.0, 1.0]
+      description: |
+        瑠那 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: LunaBreastWeightShift
+      label: flat 揺れ抑制倍率
+      group: 瑠那
+      type: float
+      default: 0.8
+      range: [0.0, 1.0]
+      description: |
+        瑠那 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+        1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+        flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: LunaBreastJiggle
+      label: 揺れ度倍率
+      group: 瑠那
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        瑠那 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
+
+    - name: LunaBreastInertia
+      label: 慣性倍率
+      group: 瑠那
+      type: float
+      default: 1.0
+      range: [0.0, 2.0]
+      description: |
+        瑠那 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。
+      ui:
+        kind: slider
+        step: 0.05
+        format: '{0:F2}'
 
 - section: General
   name: 全般

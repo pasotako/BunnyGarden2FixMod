@@ -53,7 +53,7 @@ internal static class MeshBlendShapeTransplanter
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         var newMesh = Object.Instantiate(targetMesh);
-        newMesh.name = targetMesh.name + "_transplanted";
+        newMesh.name = targetMesh.name + Internal.ModMeshSuffixes.Transplanted;
 
         int shapesAdded = 0;
         long nearestMsTotal = 0;

@@ -45,6 +45,9 @@ public class Plugin : BaseUnityPlugin
         // HotkeyConfig (KB+Pad 統合型) も BindAll 内で初期化される。
         Configs.BindAll(Config);
 
+        // F9 パネルのグループ折りたたみ状態を .cfg から復元する（UI 非表示の内部状態）。
+        global::BunnyGarden2FixMod.Patches.Settings.SettingsCollapseState.Init(Config);
+
         // Steam 外起動を検出した場合は Steam 経由で再起動して即終了
         if (Configs.SteamLaunchCheck.Value && SteamLaunchChecker.CheckAndRelaunchIfNeeded())
         {
@@ -62,9 +65,16 @@ public class Plugin : BaseUnityPlugin
         Patches.Settings.SettingsController.Initialize(gameObject);
         Patches.HideUI.HideUIRuntime.Initialize(gameObject);
         Patches.CostumeChanger.StockingsDonorLoader.Initialize(gameObject);
+        // 衣装系 mesh (BreastFlatten / Tops / Bottoms / cloth) の初期化。
+        // config 変更の live tune は CostumeReflectionCoordinator が一元処理する。
+        Patches.CostumeChanger.BreastFlattenApplier.Initialize(gameObject);
+        Patches.CostumeChanger.BreastClothTuner.Initialize(gameObject);
+        Patches.CostumeChanger.BreastClothWeightShifter.Initialize(gameObject);
+        Patches.CostumeChanger.CostumeReflectionCoordinator.Initialize(gameObject);
         freeCamera = Patches.FreeCamera.FreeCameraManager.Initialize(gameObject);
         Patches.TimeController.Initialize(gameObject);
         SceneManager.sceneUnloaded += Patches.CostumeChanger.PantiesAltSlotMatchPatch.OnSceneUnloaded;
+        SceneManager.sceneUnloaded += _ => Patches.CostumeChanger.Internal.NativeSmrRegistry.ClearScene();
         PatchLogger.LogInfo($"プラグイン起動: {MyPluginInfo.PLUGIN_GUID} v{MyPluginInfo.PLUGIN_VERSION}");
         PatchLogger.LogInfo($"解像度パッチを適用しました: {Configs.Width.Value}x{Configs.Height.Value}");
         PatchLogger.LogInfo($"アンチエイリアシング設定: {Configs.AntiAliasing.Value}");

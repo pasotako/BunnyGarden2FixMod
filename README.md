@@ -4,8 +4,8 @@
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b4e45f40-5420-4811-8500-4a0c3b4d1e69" />
 <img width="1920" height="1000" alt="スクリーンショット 2026-04-16 191718-e" src="https://github.com/user-attachments/assets/f6c86e6b-2ad5-4b5f-bfa8-6ff66fcaf43b" />
 
-## 対応バージョン(MODバージョンv1.0.9現在)
-- ゲームバージョン1.0.3および1.0.4のみ対応  
+## 対応バージョン(MODバージョンv1.0.10現在)
+- ゲームバージョン1.0.5のみ対応  
 
 ## 機能
 - 内部解像度を指定することで画質を向上することができる。

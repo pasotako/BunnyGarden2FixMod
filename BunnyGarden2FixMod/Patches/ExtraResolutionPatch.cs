@@ -46,14 +46,21 @@ namespace BunnyGarden2FixMod.Patches;
 [HarmonyPatch]
 public static class ExtraResolutionPatch
 {
-    /// <summary>DISPLAY 行の判定に使う title MSGID の ID 値。</summary>
-    internal static readonly int DisplayTitleId = (int)MSGID_SPLIT_2.OPTION_DISPLAY;
+    /// <summary>
+    /// DISPLAY 行の判定に使う title MSGID の ID 値。
+    /// enum 直参照はビルド時定数として焼き込まれ、ゲーム更新のテーブル挿入でずれると
+    /// title.ID 一致判定が常に false になり拡張解像度が機能停止するため、実行時に名前解決する
+    /// (MsgIdResolver の説明参照)。
+    /// </summary>
+    internal static readonly int DisplayTitleId =
+        MsgIdResolver.Id(nameof(MSGID_SPLIT_2.OPTION_DISPLAY), (int)MSGID_SPLIT_2.OPTION_DISPLAY);
 
     /// <summary>
     /// ラベルリスト先頭に追加する拡張のプレースホルダ MSGID。
     /// 実描画は updateDisplay の Postfix で上書きするので中身は何でもよい。
     /// </summary>
-    private static readonly MSGID ExtraLabelPlaceholder = MSGID_SPLIT_2.OPTION_DISPLAY_1080P;
+    private static readonly MSGID ExtraLabelPlaceholder =
+        MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.OPTION_DISPLAY_1080P), MSGID_SPLIT_2.OPTION_DISPLAY_1080P);
 
     /// <summary>UI 上の拡張解像度のインデックス（先頭に挿入するので 0）。</summary>
     internal const int ExtraUiIndex = 0;

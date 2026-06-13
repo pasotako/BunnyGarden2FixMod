@@ -4,9 +4,6 @@
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b4e45f40-5420-4811-8500-4a0c3b4d1e69" />
 <img width="1920" height="1000" alt="スクリーンショット 2026-04-16 191718-e" src="https://github.com/user-attachments/assets/f6c86e6b-2ad5-4b5f-bfa8-6ff66fcaf43b" />
 
-## おしらせ
-**DLC完全対応！**
-
 ## 対応バージョン(MODバージョンv1.0.9現在)
 - ゲームバージョン1.0.3および1.0.4のみ対応  
 
@@ -14,15 +11,16 @@
 - 内部解像度を指定することで画質を向上することができる。
 - 本来は60で固定されていたフレームレート制限を任意の値にするか、取り払うことができる。
 - アンチエイリアスを設定し、さらに画面のガビガビ感(ジャギー)を減らすことができる。
-- フリーカメラ機能。キーボード／コントローラー操作、時間停止、表示オーバーレイの切り替えに対応。
+- フリーカメラ機能。キーボード／コントローラー操作、時間停止、表示オーバーレイの切り替えに対応。フリーカメラの映像をメイン画面・PiP・サブモニターに出力先選択できる。
 - フリーカメラ中のスクリーンショット保存機能。表示オーバーレイを写さず PNG で保存できる。
 - ドリンク、フード、会話選択肢の正解を表示させることが出来る。(デフォルトでは無効)
 - ストッキングを強制的に非表示にすることができる。(デフォルトでは無効)
 - バーに入る前にキャストの出勤順序を変更できる。(デフォルトでは無効)
 - チェキ（撮影写真）を高解像度で保存できる。(デフォルトでは無効)
-- F7キーで衣装・パンツ・ストッキングを自由に切り替えることができる。(デフォルトでは有効)
+- F7キーで衣装・パンツ・ストッキングを自由に切り替えることができる。別キャストの上衣・下衣を移植する衣装チェンジャー機能つき。(デフォルトでは有効)
 - F9キーで旅行・特別なシーンの所持金UI、ボタンガイド、ラブカウンターを非表示にできる。(所持金非表示はデフォルトで有効)
 - 色収差エフェクト（画面端のにじみ）を無効化できる。(デフォルトでは無効)
+- 胸の形状を平坦化するオプション。キャラクターごとに調整可能。(デフォルトでは無効)
 
 ## 導入方法(Steam Deckも対応)
 1. [Releases](https://github.com/kazumasa200/BunnyGarden2FixMod/releases/latest)から最新のzipファイルをダウンロードする。(BunnyGarden2FixMod_v1.0.6.1_BepInEx5.zipみたいな感じ)ブラウザによってはブロックするかもしれないので注意。<br>導入時の最新バージョンを入れてください。
@@ -42,6 +40,9 @@
 
 5. 一度Steamのプレイボタンからゲームを起動した後、[Releases](https://github.com/kazumasa200/BunnyGarden2FixMod/releases/latest)からダウンロードしたZipを展開し、中にある```net.noeleve.BunnyGarden2FixMod.dll```をBepinExフォルダの中のPluginsの中に入れる。
 <img width="1490" height="383" alt="image" src="https://github.com/user-attachments/assets/f24310e1-c5f1-4a08-9195-b25d0fe37377" />
+
+> [!IMPORTANT]
+> `BepInEx/` の直下ではなく、**`BepInEx/plugins/` フォルダの中**に入れてください。
 
 6. もう一度起動するとBepinExフォルダの中のconfigフォルダに```net.noeleve.BunnyGarden2FixMod.cfg```設定ファイルが出来上がるので、それをメモ帳などで変更して解像度の設定やフレームレートなどの設定をする。
 <img width="1677" height="1906" alt="image" src="https://github.com/user-attachments/assets/d8cdc40e-7299-46f4-bbf0-ba5d685c38c9" />

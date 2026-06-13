@@ -80,7 +80,7 @@ public class CostumePickerController : MonoBehaviour
     /// <summary>ゲーム側入力（GBInput）をパッチで抑制すべき状態かを返す。</summary>
     public static bool ShouldSuppressGameInput()
     {
-        if (Configs.CostumeChangerEnabled?.Value != true) return false;
+        if (!Configs.CostumeChangerEnabled.Value) return false;
         // ConfirmDialog 表示中は抑制解除（ダイアログが GBInput を読むため）
         if (ConfirmDialogHelper.IsActive()) return false;
         var ctrl = Instance;
@@ -117,10 +117,10 @@ public class CostumePickerController : MonoBehaviour
 
         // F9 設定パネル等から Stocking 系 Config が変更された場合、picker open 中なら即時メッシュ反映する。
         // ShapeFalloff は blendShape 全 frame の再構築を伴って重いので Update() でデバウンスする。
-        if (Configs.StockingOffset != null) Configs.StockingOffset.SettingChanged += OnStockingTuneChanged;
-        if (Configs.StockingSkinShrink != null) Configs.StockingSkinShrink.SettingChanged += OnStockingTuneChanged;
-        if (Configs.StockingSkinFalloffRadius != null) Configs.StockingSkinFalloffRadius.SettingChanged += OnStockingTuneChanged;
-        if (Configs.StockingShapeFalloffRadius != null) Configs.StockingShapeFalloffRadius.SettingChanged += OnStockingShapeFalloffChanged;
+        Configs.StockingOffset.SettingChanged += OnStockingTuneChanged;
+        Configs.StockingSkinShrink.SettingChanged += OnStockingTuneChanged;
+        Configs.StockingSkinFalloffRadius.SettingChanged += OnStockingTuneChanged;
+        Configs.StockingShapeFalloffRadius.SettingChanged += OnStockingShapeFalloffChanged;
         // Tops 距離保存の閾値変更は TopsLoader 側で全 target に適用するため、ここでは購読しない。
     }
 
@@ -137,10 +137,10 @@ public class CostumePickerController : MonoBehaviour
             m_view.OnResetAllClicked -= HandleResetAllClicked;
             m_view.OnUnlockAllClicked -= HandleUnlockAllClicked;
         }
-        if (Configs.StockingOffset != null) Configs.StockingOffset.SettingChanged -= OnStockingTuneChanged;
-        if (Configs.StockingSkinShrink != null) Configs.StockingSkinShrink.SettingChanged -= OnStockingTuneChanged;
-        if (Configs.StockingSkinFalloffRadius != null) Configs.StockingSkinFalloffRadius.SettingChanged -= OnStockingTuneChanged;
-        if (Configs.StockingShapeFalloffRadius != null) Configs.StockingShapeFalloffRadius.SettingChanged -= OnStockingShapeFalloffChanged;
+        Configs.StockingOffset.SettingChanged -= OnStockingTuneChanged;
+        Configs.StockingSkinShrink.SettingChanged -= OnStockingTuneChanged;
+        Configs.StockingSkinFalloffRadius.SettingChanged -= OnStockingTuneChanged;
+        Configs.StockingShapeFalloffRadius.SettingChanged -= OnStockingShapeFalloffChanged;
         if (Instance == this) Instance = null;
     }
 
@@ -219,7 +219,6 @@ public class CostumePickerController : MonoBehaviour
             ReapplyStockingForTune();
         }
 
-        if (Configs.CostumeChangerEnabled == null) return;
         if (!Configs.CostumeChangerEnabled.Value) return;
         // Awake で AddComponent<CostumePickerView>() が何らかの理由（例外）で失敗したケース防御。
         // m_view.IsShown などを触る前段で早期 return する。
@@ -751,14 +750,16 @@ public class CostumePickerController : MonoBehaviour
         catch { return id.ToString(); }
     }
 
+    // MSGID は実行時に名前解決する (enum 直参照はビルド時定数として焼き込まれ、
+    // ゲーム更新のテーブル挿入でずれるため。MsgIdResolver の説明参照)。
     private static MSGID CostumeToMsgId(CostumeType c) => c switch
     {
-        CostumeType.Uniform => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_COSTUME_UNIFORM,
-        CostumeType.Casual => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_COSTUME_CASUAL,
-        CostumeType.SwimWear => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_COSTUME_SWIMWEAR,
-        CostumeType.Babydoll => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_COSTUME_BABYDOLL,
-        CostumeType.Shirt => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_COSTUME_SHIRT,
-        CostumeType.Bunnygirl => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_COSTUME_BUNNYGIRL,
+        CostumeType.Uniform => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_COSTUME_UNIFORM), MSGID_SPLIT_2.FITTING_ROOM_COSTUME_UNIFORM),
+        CostumeType.Casual => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_COSTUME_CASUAL), MSGID_SPLIT_2.FITTING_ROOM_COSTUME_CASUAL),
+        CostumeType.SwimWear => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_COSTUME_SWIMWEAR), MSGID_SPLIT_2.FITTING_ROOM_COSTUME_SWIMWEAR),
+        CostumeType.Babydoll => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_COSTUME_BABYDOLL), MSGID_SPLIT_2.FITTING_ROOM_COSTUME_BABYDOLL),
+        CostumeType.Shirt => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_COSTUME_SHIRT), MSGID_SPLIT_2.FITTING_ROOM_COSTUME_SHIRT),
+        CostumeType.Bunnygirl => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_COSTUME_BUNNYGIRL), MSGID_SPLIT_2.FITTING_ROOM_COSTUME_BUNNYGIRL),
         _ => null,
     };
 
@@ -780,12 +781,12 @@ public class CostumePickerController : MonoBehaviour
 
     private static MSGID PantiesBeginMsgId(CharID id) => id switch
     {
-        CharID.KANA => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_PANTIES_KANA_A_0,
-        CharID.RIN => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_PANTIES_RIN_A_0,
-        CharID.MIUKA => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_PANTIES_MIUKA_A_0,
-        CharID.ERISA => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_PANTIES_ERISA_A_0,
-        CharID.KUON => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_PANTIES_KUON_A_0,
-        CharID.LUNA => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_PANTIES_LUNA_A_0,
+        CharID.KANA => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_PANTIES_KANA_A_0), MSGID_SPLIT_2.FITTING_ROOM_PANTIES_KANA_A_0),
+        CharID.RIN => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_PANTIES_RIN_A_0), MSGID_SPLIT_2.FITTING_ROOM_PANTIES_RIN_A_0),
+        CharID.MIUKA => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_PANTIES_MIUKA_A_0), MSGID_SPLIT_2.FITTING_ROOM_PANTIES_MIUKA_A_0),
+        CharID.ERISA => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_PANTIES_ERISA_A_0), MSGID_SPLIT_2.FITTING_ROOM_PANTIES_ERISA_A_0),
+        CharID.KUON => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_PANTIES_KUON_A_0), MSGID_SPLIT_2.FITTING_ROOM_PANTIES_KUON_A_0),
+        CharID.LUNA => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_PANTIES_LUNA_A_0), MSGID_SPLIT_2.FITTING_ROOM_PANTIES_LUNA_A_0),
         _ => null,
     };
 
@@ -807,10 +808,10 @@ public class CostumePickerController : MonoBehaviour
 
     private static MSGID StockingToMsgId(int type) => type switch
     {
-        0 => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_STOCKING_DEFAULT,
-        1 => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_STOCKING_PANSTO_BLACK,
-        2 => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_STOCKING_PANSTO_WHITE,
-        3 => (MSGID)MSGID_SPLIT_2.FITTING_ROOM_STOCKING_PANSTO_FISHNET,
+        0 => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_STOCKING_DEFAULT), MSGID_SPLIT_2.FITTING_ROOM_STOCKING_DEFAULT),
+        1 => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_STOCKING_PANSTO_BLACK), MSGID_SPLIT_2.FITTING_ROOM_STOCKING_PANSTO_BLACK),
+        2 => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_STOCKING_PANSTO_WHITE), MSGID_SPLIT_2.FITTING_ROOM_STOCKING_PANSTO_WHITE),
+        3 => MsgIdResolver.Msg(nameof(MSGID_SPLIT_2.FITTING_ROOM_STOCKING_PANSTO_FISHNET), MSGID_SPLIT_2.FITTING_ROOM_STOCKING_PANSTO_FISHNET),
         _ => null,
     };
 
@@ -938,13 +939,12 @@ public class CostumePickerController : MonoBehaviour
                 if (BottomsOverrideStore.TryGet(m_activeChar, out var curB)
                     && curB.DonorChar == bItem.Donor && curB.DonorCostume == bItem.Costume)
                 {
-                    // トグル解除: store クリア + target SMR をスナップショットから素状態に復元。
-                    // env.LoadCharacter は同 costume だと no-op で setup() Postfix が発火しないため
-                    // 直接 Restore する。
+                    // トグル解除: store クリア + 全 garment を reset して store 状態から canonical 再適用。
+                    // env.LoadCharacter は同 costume だと no-op で setup() Postfix が発火しないため reload せず
+                    // ReflectToggleOff で直接反映する。Store.Clear を必ず先に呼ぶ (skin_upper 所有権の収束が依存)。
+                    // 残存 override の cloth flatten / skin_upper swap / HoleScene companion を順序非依存で揃える。
                     BottomsOverrideStore.Clear(m_activeChar);
-                    var envR = GBSystem.Instance?.GetActiveEnvScene();
-                    var charObjR = envR?.FindCharacter(m_activeChar);
-                    if (charObjR != null) BottomsLoader.RestoreFor(charObjR);
+                    CostumeReflectionCoordinator.ReflectToggleOff(m_activeChar);
                     m_view.Render(BuildRenderData());
                     return;
                 }
@@ -959,13 +959,13 @@ public class CostumePickerController : MonoBehaviour
                 if (TopsOverrideStore.TryGet(m_activeChar, out var curTops)
                     && curTops.DonorChar == tItem.Donor && curTops.DonorCostume == tItem.Costume)
                 {
-                    // トグル解除: store クリア + target SMR をスナップショットから素状態に復元。
-                    // env.LoadCharacter は同 costume だと no-op で setup() Postfix が発火しないため
-                    // 直接 Restore する（Bottoms と同方針）。
+                    // トグル解除: store クリア + 全 garment を reset して store 状態から canonical 再適用
+                    // (Bottoms と同方針)。env.LoadCharacter は同 costume だと no-op で setup() Postfix が
+                    // 発火しないため reload せず ReflectToggleOff で直接反映する。Store.Clear を必ず先に呼ぶ。
+                    // これにより SwimWear+flatten+Bottoms 残存時の swimsuit cloth 膨らみ戻り (Tops 解除で
+                    // cloth flatten が再適用されない bug) と skin_upper 所有権戻りを順序非依存で解消する。
                     TopsOverrideStore.Clear(m_activeChar);
-                    var envR = GBSystem.Instance?.GetActiveEnvScene();
-                    var charObjR = envR?.FindCharacter(m_activeChar);
-                    if (charObjR != null) TopsLoader.RestoreFor(charObjR);
+                    CostumeReflectionCoordinator.ReflectToggleOff(m_activeChar);
                     m_view.Render(BuildRenderData());
                     return;
                 }
@@ -1024,12 +1024,25 @@ public class CostumePickerController : MonoBehaviour
                 else TopsOverrideStore.Clear(id);
                 return;
             }
-            TopsLoader.ApplyDirectly(charObj, donor, costume);
+            // store(step 2) を更新済みの状態から canonical 再適用に揃える。
+            // 素の TopsLoader.ApplyDirectly 直叩きだと、Bar↔タイトル往復で preserved char の s_applied 抑止により
+            // Bottoms 切替時に Tops が再適用されず skin_upper の OriginalSkinUpper が native baseline で確定し破綻する。
+            // ReflectChar は hasBottoms→BottomsLoader.ApplyDirectly → hasTops→TopsLoader.ApplyDirectly の
+            // Bottoms→Tops 固定順で再構築する。
+            // 【収束順序依存 (M-1/M-R2)】SkinShrinkCoordinator.RegisterTops=無条件上書き /
+            //   RegisterBottoms=OriginalSkinUpper==null 時のみ捕捉、という非対称ゆえに「Tops を後に置く」と
+            //   Tops の Babydoll 確定が最終勝者になる。後続改修者はこの呼び順を入れ替えないこと。
+            // companion(HoleScene) スコープ (M-3/M-R3): ここは env 本体 1 体のみ反映 (空 seen に charObj だけ投入)。
+            //   toggle-off の ReflectToggleOff は env+HoleScene 両走査で対称だが、切替の dual-scene 化はスコープ
+            //   拡大のため本 fix では行わない (素 ApplyDirectly と同スコープ＝新規退行ではない。別 issue 化推奨)。
+            CostumeReflectionCoordinator.ReflectChar(charObj, id, new HashSet<int>());
             m_view.Render(BuildRenderData());
         }
         catch (Exception ex)
         {
             PatchLogger.LogWarning($"[CostumePicker] 上衣移植失敗: {ex}");
+            // ここに到達するのは ReflectChar 呼出 *前後* の例外 (FindCharacter / store Set 等)。ReflectChar 内部の
+            // ApplyDirectly 例外は ReflectChar 自身が swallow するためここには来ない (C-2: toggle-off/live-tune と対称)。
             // 部分的に SMR 変更後の例外で乖離が起きないよう、SMR を素状態に戻してから
             // store を旧状態へ revert する（Bottoms と同方針）。
             var envC = GBSystem.Instance?.GetActiveEnvScene();
@@ -1074,13 +1087,23 @@ public class CostumePickerController : MonoBehaviour
                 else BottomsOverrideStore.Clear(id);
                 return;
             }
-            BottomsLoader.ApplyDirectly(charObj, donor, costume);
+            // store(step 2) を更新済みの状態から canonical 再適用に揃える (ApplyTopsAsync と対称)。
+            // 素の BottomsLoader.ApplyDirectly 直叩きだと、Tops 併用 + Bar↔タイトル往復後の Bottoms 切替で
+            // Tops が再適用されず skin_upper が native baseline で flatten され破綻する (postmortem §13)。
+            // ReflectChar が hasBottoms→BottomsLoader.ApplyDirectly → hasTops→TopsLoader.ApplyDirectly の
+            // Bottoms→Tops 固定順で再構築し、後段の Tops Apply が OriginalSkinUpper=Babydoll を確定する。
+            // 【収束順序依存 (M-1/M-R2)】RegisterTops=無条件上書き / RegisterBottoms=OriginalSkinUpper==null 時のみ
+            //   捕捉、の非対称ゆえ Tops を後に置くのが安全。後続改修者はこの呼び順を入れ替えないこと。
+            // companion(HoleScene) スコープ (M-3/M-R3): ApplyTopsAsync と同じく env 本体 1 体のみ反映 (別 issue)。
+            CostumeReflectionCoordinator.ReflectChar(charObj, id, new HashSet<int>());
             m_view.Render(BuildRenderData());
         }
         catch (Exception ex)
         {
             PatchLogger.LogWarning($"[CostumePicker] 下衣移植失敗: {ex}");
-            // ApplyDirectly が部分的に SMR を変更した後の例外で乖離が起きないよう、
+            // ここに到達するのは ReflectChar 呼出 *前後* の例外 (FindCharacter / store Set 等)。ReflectChar 内部の
+            // ApplyDirectly 例外は ReflectChar 自身が swallow するためここには来ない (C-2: toggle-off/live-tune と対称)。
+            // 部分的に SMR を変更した後の例外で乖離が起きないよう、
             // SMR を素状態に戻してから override store を旧状態へ revert する。
             // RestoreFor は snapshot 未捕捉時は no-op。
             var envC = GBSystem.Instance?.GetActiveEnvScene();

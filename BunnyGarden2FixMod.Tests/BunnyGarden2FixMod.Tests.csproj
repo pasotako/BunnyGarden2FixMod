@@ -1,0 +1,100 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    ゲームの Managed フォルダ (UnityEngine.CoreModule.dll の所在) を解決する。
+    優先順位:
+      1. -p:UnityManagedDir="..." で明示指定
+      2. 環境変数 BG2_MANAGED_DIR
+      3. 既知の候補パスを自動探索 (複数ドライブの Steam ライブラリに対応)
+    いずれでも見つからない場合はテストのビルドを skip する (本体ビルドは止めない)。
+    Windows の dotnet.exe でビルドするため Windows パス (C:/...) で指定する。WSL パス (/mnt/c/...) は解決不可。
+  -->
+  <PropertyGroup>
+    <UnityManagedDir Condition="'$(UnityManagedDir)' == '' And '$(BG2_MANAGED_DIR)' != ''">$(BG2_MANAGED_DIR)</UnityManagedDir>
+  </PropertyGroup>
+
+  <!-- 候補パスを順に探索。最初に CoreModule.dll が存在したものを採用する。 -->
+  <PropertyGroup Condition="'$(UnityManagedDir)' == ''">
+    <_Bg2Rel>steamapps/common/BUNNY GARDEN 2/BUNNY GARDEN 2_Data/Managed</_Bg2Rel>
+    <_Bg2Probe>C:/Program Files (x86)/Steam/$(_Bg2Rel)</_Bg2Probe>
+    <UnityManagedDir Condition="Exists('$(_Bg2Probe)/UnityEngine.CoreModule.dll')">$(_Bg2Probe)</UnityManagedDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UnityManagedDir)' == ''">
+    <_Bg2Probe>C:/SteamLibrary/$(_Bg2Rel)</_Bg2Probe>
+    <UnityManagedDir Condition="Exists('$(_Bg2Probe)/UnityEngine.CoreModule.dll')">$(_Bg2Probe)</UnityManagedDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UnityManagedDir)' == ''">
+    <_Bg2Probe>D:/SteamLibrary/$(_Bg2Rel)</_Bg2Probe>
+    <UnityManagedDir Condition="Exists('$(_Bg2Probe)/UnityEngine.CoreModule.dll')">$(_Bg2Probe)</UnityManagedDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UnityManagedDir)' == ''">
+    <_Bg2Probe>E:/SteamLibrary/$(_Bg2Rel)</_Bg2Probe>
+    <UnityManagedDir Condition="Exists('$(_Bg2Probe)/UnityEngine.CoreModule.dll')">$(_Bg2Probe)</UnityManagedDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UnityManagedDir)' == ''">
+    <_Bg2Probe>F:/SteamLibrary/$(_Bg2Rel)</_Bg2Probe>
+    <UnityManagedDir Condition="Exists('$(_Bg2Probe)/UnityEngine.CoreModule.dll')">$(_Bg2Probe)</UnityManagedDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UnityManagedDir)' == ''">
+    <_Bg2Probe>G:/SteamLibrary/$(_Bg2Rel)</_Bg2Probe>
+    <UnityManagedDir Condition="Exists('$(_Bg2Probe)/UnityEngine.CoreModule.dll')">$(_Bg2Probe)</UnityManagedDir>
+  </PropertyGroup>
+
+  <!-- Managed フォルダが解決できたかどうかのフラグ。未解決ならテストのビルドを丸ごと skip する。 -->
+  <PropertyGroup>
+    <Bg2ManagedResolved Condition="'$(UnityManagedDir)' != '' And Exists('$(UnityManagedDir)/UnityEngine.CoreModule.dll')">true</Bg2ManagedResolved>
+    <Bg2ManagedResolved Condition="'$(Bg2ManagedResolved)' == ''">false</Bg2ManagedResolved>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <!--
+    Managed フォルダ未解決時は、ソリューション全体のビルドを止めないよう
+    ハードエラーにせず Warning を出してテストのコンパイルを skip する。
+    テストを実際に走らせたい場合は -p:UnityManagedDir="..." か環境変数 BG2_MANAGED_DIR を指定する。
+  -->
+  <Target Name="WarnUnityManagedDirMissing" BeforeTargets="BeforeBuild" Condition="'$(Bg2ManagedResolved)' == 'false'">
+    <Warning Text="ゲームの Managed フォルダが見つからないためテストのビルドを skip します。テストを走らせるには -p:UnityManagedDir=&quot;C:/.../*_Data/Managed&quot; か 環境変数 BG2_MANAGED_DIR を指定してください。" />
+  </Target>
+
+  <!-- 解決できた時だけ Unity 参照とテスト対象ソースを取り込む。 -->
+  <ItemGroup Condition="'$(Bg2ManagedResolved)' == 'true'">
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(UnityManagedDir)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    テスト対象の純粋ソースは Compile link で取り込む（BepInEx/Harmony 依存を避けるため本体 dll 参照はしない）。
+    リンクするソースは UnityEngine + System のみに依存する純関数であること（実機 CoreModule で実行時解決）。
+    Managed フォルダ未解決時は CoreModule 参照が無く CS0246 が連鎖するため、リンク自体も skip する。
+  -->
+  <ItemGroup Condition="'$(Bg2ManagedResolved)' == 'true'">
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/SpatialGridIndex.cs" Link="Linked/SpatialGridIndex.cs" />
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/SkinUpperWeightConformer.cs" Link="Linked/SkinUpperWeightConformer.cs" />
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/BreastWeightShiftMath.cs" Link="Linked/BreastWeightShiftMath.cs" />
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/MeshDisplacementSmoother.cs" Link="Linked/MeshDisplacementSmoother.cs" />
+    <Compile Include="../BunnyGarden2FixMod/Patches/CostumeChanger/BreastClothLowerFadeMath.cs" Link="Linked/BreastClothLowerFadeMath.cs" />
+  </ItemGroup>
+
+  <!--
+    未解決時はテストソース (xunit に依存) も丸ごと除外し、空アセンブリとしてビルドを通す。
+    既定の glob で *.cs が拾われるため明示的に除去する。
+  -->
+  <ItemGroup Condition="'$(Bg2ManagedResolved)' == 'false'">
+    <Compile Remove="**/*.cs" />
+  </ItemGroup>
+
+</Project>

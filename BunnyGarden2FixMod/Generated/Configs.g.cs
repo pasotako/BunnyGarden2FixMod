@@ -97,6 +97,12 @@ public static class Configs
     public static ConfigEntry<float> TopsSkinSampleRadius;
     /// <summary>上衣 肌 weight 転送 falloff (m)</summary>
     public static ConfigEntry<float> TopsSkinWeightFalloff;
+    /// <summary>重ね着時 胸 押し出し (m)</summary>
+    public static ConfigEntry<float> TopsAdditiveBreastPushOut;
+    /// <summary>距離保存 平滑化 反復回数</summary>
+    public static ConfigEntry<int> DistancePreserveSmoothIterations;
+    /// <summary>距離保存 平滑化 寄せ率</summary>
+    public static ConfigEntry<float> DistancePreserveSmoothStrength;
     /// <summary>上衣 肌押込み量 (m)</summary>
     public static ConfigEntry<float> TopsSkinShrink;
     /// <summary>上衣 肌押込み フェード半径 (m)</summary>
@@ -111,10 +117,76 @@ public static class Configs
     public static ConfigEntry<float> BottomsSkinShrinkSampleRadius;
     /// <summary>水着・バニーガール衣装でも下着を表示</summary>
     public static ConfigEntry<bool> PantiesAltSlotMatch;
-    /// <summary>Mod で下着を指定したキャストのみ適用 (OFF で全員)</summary>
+    /// <summary>Mod で下着を指定したキャストのみ適用</summary>
     public static ConfigEntry<bool> PantiesAltSlotOverrideOnly;
     /// <summary>キャストのストッキング(パンスト)を非表示</summary>
     public static ConfigEntry<bool> DisableStockings;
+    /// <summary>上半身肌の腰継ぎ目を元の体型に合わせる</summary>
+    public static ConfigEntry<bool> SkinUpperSeamConform;
+    /// <summary>腰継ぎ目 conform 近接距離 (m)</summary>
+    public static ConfigEntry<float> SkinUpperSeamConformDist;
+    /// <summary>胸 flat smoothing 半径 (m)</summary>
+    public static ConfigEntry<float> BreastFlattenSmoothRadius;
+    /// <summary>胸 flat 反復回数</summary>
+    public static ConfigEntry<int> BreastFlattenSmoothIterations;
+    /// <summary>胸 flat 寄せ率</summary>
+    public static ConfigEntry<float> BreastFlattenSmoothStrength;
+    /// <summary>胸 flat 谷間沈め</summary>
+    public static ConfigEntry<float> BreastFlattenCleavageShrink;
+    /// <summary>胸 flat 谷間幅</summary>
+    public static ConfigEntry<float> BreastFlattenCleavageWidth;
+    /// <summary>胸 flat 下半身衣装を保護</summary>
+    public static ConfigEntry<bool> BreastFlattenLowerFade;
+    /// <summary>胸 flat 下半身保護のフェード幅 (m)</summary>
+    public static ConfigEntry<float> BreastFlattenLowerFadeWidth;
+    /// <summary>flat 量</summary>
+    public static ConfigEntry<float> KanaBreastFlatten;
+    /// <summary>flat 揺れ抑制倍率</summary>
+    public static ConfigEntry<float> KanaBreastWeightShift;
+    /// <summary>揺れ度倍率</summary>
+    public static ConfigEntry<float> KanaBreastJiggle;
+    /// <summary>慣性倍率</summary>
+    public static ConfigEntry<float> KanaBreastInertia;
+    /// <summary>flat 量</summary>
+    public static ConfigEntry<float> RinBreastFlatten;
+    /// <summary>flat 揺れ抑制倍率</summary>
+    public static ConfigEntry<float> RinBreastWeightShift;
+    /// <summary>揺れ度倍率</summary>
+    public static ConfigEntry<float> RinBreastJiggle;
+    /// <summary>慣性倍率</summary>
+    public static ConfigEntry<float> RinBreastInertia;
+    /// <summary>flat 量</summary>
+    public static ConfigEntry<float> MiukaBreastFlatten;
+    /// <summary>flat 揺れ抑制倍率</summary>
+    public static ConfigEntry<float> MiukaBreastWeightShift;
+    /// <summary>揺れ度倍率</summary>
+    public static ConfigEntry<float> MiukaBreastJiggle;
+    /// <summary>慣性倍率</summary>
+    public static ConfigEntry<float> MiukaBreastInertia;
+    /// <summary>flat 量</summary>
+    public static ConfigEntry<float> ErisaBreastFlatten;
+    /// <summary>flat 揺れ抑制倍率</summary>
+    public static ConfigEntry<float> ErisaBreastWeightShift;
+    /// <summary>揺れ度倍率</summary>
+    public static ConfigEntry<float> ErisaBreastJiggle;
+    /// <summary>慣性倍率</summary>
+    public static ConfigEntry<float> ErisaBreastInertia;
+    /// <summary>flat 量</summary>
+    public static ConfigEntry<float> KuonBreastFlatten;
+    /// <summary>flat 揺れ抑制倍率</summary>
+    public static ConfigEntry<float> KuonBreastWeightShift;
+    /// <summary>揺れ度倍率</summary>
+    public static ConfigEntry<float> KuonBreastJiggle;
+    /// <summary>慣性倍率</summary>
+    public static ConfigEntry<float> KuonBreastInertia;
+    /// <summary>flat 量</summary>
+    public static ConfigEntry<float> LunaBreastFlatten;
+    /// <summary>flat 揺れ抑制倍率</summary>
+    public static ConfigEntry<float> LunaBreastWeightShift;
+    /// <summary>揺れ度倍率</summary>
+    public static ConfigEntry<float> LunaBreastJiggle;
+    /// <summary>慣性倍率</summary>
+    public static ConfigEntry<float> LunaBreastInertia;
     /// <summary>Steam 経由起動を強制</summary>
     public static ConfigEntry<bool> SteamLaunchCheck;
     /// <summary>MOD UI スケール</summary>
@@ -278,12 +350,10 @@ Display2: サブモニター（モニター2台以上のときのみ）");
             false,
             @"高解像度チェキを有効化
 チェキ（撮影写真）の保存解像度を Size で指定した値に変更します。false で本体既定（320x320）。
-互換性: 本体セーブには常に 320x320 版が保存されるため、MOD を外しても主セーブは破損しません。
-高解像度版は MOD 独自のサイドカーファイル（主セーブ + .exmod）に格納します。
-保存先は `BepInEx/data/net.noeleve.BunnyGarden2FixMod/`（Steam Cloud Save 対象外）。
-PC 移行時はこのフォルダを手動でコピーしてください。
-スロット対応: セーブスロット単位で高解像度データを分離管理します。
-副作用: 高解像度化でメモリ／セーブサイズが増加します（1024 時: 約 48MB/12 枚）。");
+- 互換性: 本体セーブには常に 320x320 版が保存されるため、MOD を外しても主セーブは破損しません。高解像度版は MOD 独自のサイドカーファイル（主セーブ + .exmod）に格納します。
+- 保存先: `BepInEx/data/net.noeleve.BunnyGarden2FixMod/`（Steam Cloud Save 対象外）。PC 移行時はこのフォルダを手動でコピーしてください。
+- スロット対応: セーブスロット単位で高解像度データを分離管理します。
+- 副作用: 高解像度化でメモリ／セーブサイズが増加します（1024 時: 約 48MB/12 枚）。");
 
         ChekiSize = cfg.Bind("Cheki", "Size",
             1024,
@@ -314,7 +384,7 @@ ImageFormat=JPG のときの品質（1〜100）。値が小さいほどサイズ
         CastOrder = cfg.Bind("Cheat", "CastOrder",
             false,
             @"キャスト出勤順序変更（バー入店前に F1 で編集）
-F1 で編集モードを開始し、数字キー（1〜5）でキャストを選択・入れ替えます。");
+F1 で編集モードを開始し、数字キー（1〜6）でキャストを選択・入れ替えます。");
 
         UltimateSurvivorEnabled = cfg.Bind("Cheat", "UltimateSurvivor",
             false,
@@ -332,9 +402,9 @@ F1 で編集モードを開始し、数字キー（1〜5）でキャストを選
   ★ : 好感度UP（正解）
   ▼ : 好感度DOWN（酔い選択肢だが現在の状況では効果なし）
 【ドリンク・フード】アイテムの背景色が変化します。
-  緑 : キャストのお気に入り（AddFavoriteLikability > 0）
+  緑 : キャストのお気に入り
   黄 : 今日の旬アイテム（ボーナスあり）
-  赤 : キャストが嫌いなもの（AddFavoriteLikability < 0）");
+  赤 : キャストが嫌いなもの");
 
         BunnyDrinksEnabled = cfg.Bind("Cheat", "BunnyDrinksEnabled",
             false,
@@ -436,8 +506,38 @@ Steam Cloud 対象外。");
 0 で無効。推奨初期値: 0.020 m。",
                 new AcceptableValueRange<float>(0.0f, 0.05f)));
 
+        TopsAdditiveBreastPushOut = cfg.Bind("CostumeChanger", "TopsAdditiveBreastPushOut",
+            0.003f,
+            new ConfigDescription(
+                @"重ね着時 胸 押し出し (m)
+水着など全身衣装に上着を重ね、かつ胸サイズを縮めた重ね着のときだけ効く設定です（メートル）。
+重ねた上着の胸まわりを肌から離す向きに押し出し、胸が上着を突き抜けるのを防ぎます。
+突き抜けが見える場合に少しずつ大きくしてください。0 で無効（従来どおり）。
+通常の上下分かれた衣装では使われません（そちらは肌側の押し込みで補正）。
+補正は距離保存の平滑化を通るため、押し出し量は設定値より小さく出ます
+（設定値=実際の押し出し量ではありません）。突き抜けが消える値に合わせてください。",
+                new AcceptableValueRange<float>(0.0f, 0.03f)));
+
+        DistancePreserveSmoothIterations = cfg.Bind("CostumeChanger", "DistancePreserveSmoothIterations",
+            1,
+            new ConfigDescription(
+                @"距離保存 平滑化 反復回数
+距離保存で衣装を体型に追従させた際の補正量 (disp) を、衣装メッシュ上で近傍平均する反復回数です。
+胸 flat 時の native 上着・別キャラ上衣の移植いずれにも効きます。
+多いほど表面のガタつき (逆距離² サンプリングの高周波ノイズ) が滑らかになりますが、
+増やしすぎると衣装のディテール (襞・カップの稜線) が鈍ります。0 で平滑化無効 (距離保存の生の結果)。",
+                new AcceptableValueRange<int>(0, 10)));
+
+        DistancePreserveSmoothStrength = cfg.Bind("CostumeChanger", "DistancePreserveSmoothStrength",
+            0.5f,
+            new ConfigDescription(
+                @"距離保存 平滑化 寄せ率
+距離保存 平滑化の 1 反復あたり近傍平均への寄せ率。0.0 で平滑化無効、1.0 で最大。
+ガタつきが残るなら上げ、衣装のディテールが鈍るなら下げます。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
         TopsSkinShrink = cfg.Bind("CostumeChanger", "TopsSkinShrink",
-            0.005f,
+            0.0f,
             new ConfigDescription(
                 @"上衣 肌押込み量 (m)
 別キャラ上衣を当てたとき、肌が服を貫通する箇所を内側に押し込む距離です（メートル）。
@@ -463,7 +563,7 @@ Steam Cloud 対象外。");
                 new AcceptableValueRange<float>(0.0f, 0.1f)));
 
         BottomsSkinShrink = cfg.Bind("CostumeChanger", "BottomsSkinShrink",
-            0.005f,
+            0.002f,
             new ConfigDescription(
                 @"下衣 肌押込み量 (m)
 別キャラ下衣（スカート等）を当てたとき、肌がスカートを貫通する箇所を内側に押し込む距離です（メートル）。
@@ -497,7 +597,7 @@ Steam Cloud 対象外。");
 
         PantiesAltSlotOverrideOnly = cfg.Bind("CostumeChanger", "PantiesAltSlotOverrideOnly",
             true,
-            @"Mod で下着を指定したキャストのみ適用 (OFF で全員)
+            @"Mod で下着を指定したキャストのみ適用
 ON  : Mod で下着を選択したキャストのみ適用（他キャストは水着/バニー時に通常通り肌色）。
 OFF : 全キャストに常時適用（水着/バニーでも通常下着が出ます）。
 PantiesAltSlotMatch=OFF のときはこの設定は無視されます。");
@@ -505,6 +605,259 @@ PantiesAltSlotMatch=OFF のときはこの設定は無視されます。");
         DisableStockings = cfg.Bind("CostumeChanger", "DisableStockings",
             false,
             @"キャストのストッキング(パンスト)を非表示");
+
+        SkinUpperSeamConform = cfg.Bind("CostumeChanger", "SkinUpperSeamConform",
+            true,
+            @"上半身肌の腰継ぎ目を元の体型に合わせる
+上着・水着・胸平坦化で上半身肌 (mesh_skin_upper) を共通体型(Babydoll)に差し替えたとき、
+腰の継ぎ目だけ元の体型のボーン追従と位置に戻して、下半身肌との継ぎ目のズレ（動いたときの段差・
+静的な隙間）を抑えます。腰回りでズレや隙間が出る場合は ON のままにしてください。OFF で従来動作。");
+
+        SkinUpperSeamConformDist = cfg.Bind("CostumeChanger", "SkinUpperSeamConformDist",
+            0.005f,
+            new ConfigDescription(
+                @"腰継ぎ目 conform 近接距離 (m)
+上半身肌のうち、共通体型(Babydoll)の下半身肌との距離がこの値（メートル）以内の継ぎ目頂点だけを
+元の体型のボーン追従へ戻します。胸など下半身肌から離れた部分は触らず平坦化を保ちます。
+継ぎ目の段差が残る場合は少し大きくしてください。上半身肌の腰継ぎ目 conform が OFF のときは無効。",
+                new AcceptableValueRange<float>(0.001f, 0.02f)));
+
+        BreastFlattenSmoothRadius = cfg.Bind("Breast", "BreastFlattenSmoothRadius",
+            0.1f,
+            new ConfigDescription(
+                @"胸 flat smoothing 半径 (m)
+胸を潰す Laplacian relaxation の近傍半径 (mesh-local m)。各頂点をこの半径内の頂点の平均位置へ寄せます。
+大きいほど 1 反復で広く平均し速く平らになりますが処理負荷が増加します。0 で flatten 無効。",
+                new AcceptableValueRange<float>(0.0f, 0.2f)));
+
+        BreastFlattenSmoothIterations = cfg.Bind("Breast", "BreastFlattenSmoothIterations",
+            4,
+            new ConfigDescription(
+                @"胸 flat 反復回数
+胸を潰す Laplacian relaxation の反復回数。回数を増やすほど深く沈んで平らになります。
+0 で flatten 無効。SmoothRadius を近傍半径に使うため SmoothRadius=0 でも無効。
+SmoothRadius が小さいと近傍を拾えず効きが弱くなります。",
+                new AcceptableValueRange<int>(0, 5)));
+
+        BreastFlattenSmoothStrength = cfg.Bind("Breast", "BreastFlattenSmoothStrength",
+            0.8f,
+            new ConfigDescription(
+                @"胸 flat 寄せ率
+Laplacian relaxation の 1 反復あたり近傍平均への寄せ率。0.0 で flatten 無効、1.0 で最大。
+実効強度は頂点ごとの flat 量 (amount×breast weight) で重み付けされ、胸領域外は不動。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        BreastFlattenCleavageShrink = cfg.Bind("Breast", "BreastFlattenCleavageShrink",
+            1.0f,
+            new ConfigDescription(
+                @"胸 flat 谷間沈め
+BreastFlatten 時、左右の胸の谷間 (cleavage) で衣装が平らな body の上に浮くのを抑えます。
+distance-preserve が保つ「元の丸い胸との距離」を谷間でのみ縮め、衣装を body へ引き下ろします。
+0.0 で従来挙動（縮めない）、1.0 で谷間の衣装を肌へ最大まで沈めます。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        BreastFlattenCleavageWidth = cfg.Bind("Breast", "BreastFlattenCleavageWidth",
+            1.5f,
+            new ConfigDescription(
+                @"胸 flat 谷間幅
+谷間沈めを効かせる左右の幅。胸の中心間隔に対する比率で、大きいほど胸寄りまで沈めます。
+BreastFlattenCleavageShrink が 0 のときは無効。",
+                new AcceptableValueRange<float>(0.0f, 1.5f)));
+
+        BreastFlattenLowerFade = cfg.Bind("Breast", "BreastFlattenLowerFade",
+            true,
+            @"胸 flat 下半身衣装を保護
+全身が 1 枚メッシュの衣装 (水着・バニー等) で胸を潰すとき、下半身側の衣装が一緒に
+変形するのを抑えます。腰のラインから下は元の形のまま据え置きます。OFF で従来動作。");
+
+        BreastFlattenLowerFadeWidth = cfg.Bind("Breast", "BreastFlattenLowerFadeWidth",
+            0.05f,
+            new ConfigDescription(
+                @"胸 flat 下半身保護のフェード幅 (m)
+下半身衣装の保護を腰のラインから上へどれだけの幅で滑らかに切り替えるか (mesh-local m)。
+0 で腰のラインちょうどで二値的に切り替え。大きいほど境界がなだらかになります。
+胸 flat 下半身衣装を保護が OFF のときは無効。",
+                new AcceptableValueRange<float>(0.0f, 0.2f)));
+
+        KanaBreastFlatten = cfg.Bind("Breast", "KanaBreastFlatten",
+            0.0f,
+            new ConfigDescription(
+                @"flat 量
+花奈 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        KanaBreastWeightShift = cfg.Bind("Breast", "KanaBreastWeightShift",
+            0.8f,
+            new ConfigDescription(
+                @"flat 揺れ抑制倍率
+花奈 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        KanaBreastJiggle = cfg.Bind("Breast", "KanaBreastJiggle",
+            1.0f,
+            new ConfigDescription(
+                @"揺れ度倍率
+花奈 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        KanaBreastInertia = cfg.Bind("Breast", "KanaBreastInertia",
+            1.0f,
+            new ConfigDescription(
+                @"慣性倍率
+花奈 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        RinBreastFlatten = cfg.Bind("Breast", "RinBreastFlatten",
+            0.0f,
+            new ConfigDescription(
+                @"flat 量
+凜 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        RinBreastWeightShift = cfg.Bind("Breast", "RinBreastWeightShift",
+            0.8f,
+            new ConfigDescription(
+                @"flat 揺れ抑制倍率
+凜 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        RinBreastJiggle = cfg.Bind("Breast", "RinBreastJiggle",
+            1.0f,
+            new ConfigDescription(
+                @"揺れ度倍率
+凜 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        RinBreastInertia = cfg.Bind("Breast", "RinBreastInertia",
+            1.0f,
+            new ConfigDescription(
+                @"慣性倍率
+凜 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        MiukaBreastFlatten = cfg.Bind("Breast", "MiukaBreastFlatten",
+            0.0f,
+            new ConfigDescription(
+                @"flat 量
+美羽香 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        MiukaBreastWeightShift = cfg.Bind("Breast", "MiukaBreastWeightShift",
+            0.8f,
+            new ConfigDescription(
+                @"flat 揺れ抑制倍率
+美羽香 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        MiukaBreastJiggle = cfg.Bind("Breast", "MiukaBreastJiggle",
+            1.0f,
+            new ConfigDescription(
+                @"揺れ度倍率
+美羽香 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        MiukaBreastInertia = cfg.Bind("Breast", "MiukaBreastInertia",
+            1.0f,
+            new ConfigDescription(
+                @"慣性倍率
+美羽香 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        ErisaBreastFlatten = cfg.Bind("Breast", "ErisaBreastFlatten",
+            0.0f,
+            new ConfigDescription(
+                @"flat 量
+英梨紗 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        ErisaBreastWeightShift = cfg.Bind("Breast", "ErisaBreastWeightShift",
+            0.8f,
+            new ConfigDescription(
+                @"flat 揺れ抑制倍率
+英梨紗 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        ErisaBreastJiggle = cfg.Bind("Breast", "ErisaBreastJiggle",
+            1.0f,
+            new ConfigDescription(
+                @"揺れ度倍率
+英梨紗 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        ErisaBreastInertia = cfg.Bind("Breast", "ErisaBreastInertia",
+            1.0f,
+            new ConfigDescription(
+                @"慣性倍率
+英梨紗 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        KuonBreastFlatten = cfg.Bind("Breast", "KuonBreastFlatten",
+            0.0f,
+            new ConfigDescription(
+                @"flat 量
+黒音 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        KuonBreastWeightShift = cfg.Bind("Breast", "KuonBreastWeightShift",
+            0.8f,
+            new ConfigDescription(
+                @"flat 揺れ抑制倍率
+黒音 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        KuonBreastJiggle = cfg.Bind("Breast", "KuonBreastJiggle",
+            1.0f,
+            new ConfigDescription(
+                @"揺れ度倍率
+黒音 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        KuonBreastInertia = cfg.Bind("Breast", "KuonBreastInertia",
+            1.0f,
+            new ConfigDescription(
+                @"慣性倍率
+黒音 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        LunaBreastFlatten = cfg.Bind("Breast", "LunaBreastFlatten",
+            0.0f,
+            new ConfigDescription(
+                @"flat 量
+瑠那 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        LunaBreastWeightShift = cfg.Bind("Breast", "LunaBreastWeightShift",
+            0.8f,
+            new ConfigDescription(
+                @"flat 揺れ抑制倍率
+瑠那 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。
+1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。
+flat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。",
+                new AcceptableValueRange<float>(0.0f, 1.0f)));
+
+        LunaBreastJiggle = cfg.Bind("Breast", "LunaBreastJiggle",
+            1.0f,
+            new ConfigDescription(
+                @"揺れ度倍率
+瑠那 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
+
+        LunaBreastInertia = cfg.Bind("Breast", "LunaBreastInertia",
+            1.0f,
+            new ConfigDescription(
+                @"慣性倍率
+瑠那 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。",
+                new AcceptableValueRange<float>(0.0f, 2.0f)));
 
         SteamLaunchCheck = cfg.Bind("General", "SteamLaunchCheck",
             true,
@@ -795,7 +1148,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         {
             Category = "Cheki",
             Label    = "高解像度チェキを有効化",
-            Desc     = "チェキ（撮影写真）の保存解像度を Size で指定した値に変更します。false で本体既定（320x320）。\n互換性: 本体セーブには常に 320x320 版が保存されるため、MOD を外しても主セーブは破損しません。\n高解像度版は MOD 独自のサイドカーファイル（主セーブ + .exmod）に格納します。\n保存先は `BepInEx/data/net.noeleve.BunnyGarden2FixMod/`（Steam Cloud Save 対象外）。\nPC 移行時はこのフォルダを手動でコピーしてください。\nスロット対応: セーブスロット単位で高解像度データを分離管理します。\n副作用: 高解像度化でメモリ／セーブサイズが増加します（1024 時: 約 48MB/12 枚）。\n",
+            Desc     = "チェキ（撮影写真）の保存解像度を Size で指定した値に変更します。false で本体既定（320x320）。\n- 互換性: 本体セーブには常に 320x320 版が保存されるため、MOD を外しても主セーブは破損しません。高解像度版は MOD 独自のサイドカーファイル（主セーブ + .exmod）に格納します。\n- 保存先: `BepInEx/data/net.noeleve.BunnyGarden2FixMod/`（Steam Cloud Save 対象外）。PC 移行時はこのフォルダを手動でコピーしてください。\n- スロット対応: セーブスロット単位で高解像度データを分離管理します。\n- 副作用: 高解像度化でメモリ／セーブサイズが増加します（1024 時: 約 48MB/12 枚）。\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => ChekiHighResEnabled),
         },
@@ -844,7 +1197,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         {
             Category = "Cheat",
             Label    = "キャスト出勤順序変更（バー入店前に F1 で編集）",
-            Desc     = "F1 で編集モードを開始し、数字キー（1〜5）でキャストを選択・入れ替えます。",
+            Desc     = "F1 で編集モードを開始し、数字キー（1〜6）でキャストを選択・入れ替えます。",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => CastOrder),
         },
@@ -868,7 +1221,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         {
             Category = "Cheat",
             Label    = "好感度ヒント表示",
-            Desc     = "会話選択肢・ドリンク・フードの正解をゲーム内に表示します。\n【会話選択肢】選択肢テキストの先頭に記号が追加されます。\n  ★ : 好感度UP（正解）\n  ▼ : 好感度DOWN（酔い選択肢だが現在の状況では効果なし）\n【ドリンク・フード】アイテムの背景色が変化します。\n  緑 : キャストのお気に入り（AddFavoriteLikability > 0）\n  黄 : 今日の旬アイテム（ボーナスあり）\n  赤 : キャストが嫌いなもの（AddFavoriteLikability < 0）\n",
+            Desc     = "会話選択肢・ドリンク・フードの正解をゲーム内に表示します。\n【会話選択肢】選択肢テキストの先頭に記号が追加されます。\n  ★ : 好感度UP（正解）\n  ▼ : 好感度DOWN（酔い選択肢だが現在の状況では効果なし）\n【ドリンク・フード】アイテムの背景色が変化します。\n  緑 : キャストのお気に入り\n  黄 : 今日の旬アイテム（ボーナスあり）\n  赤 : キャストが嫌いなもの\n",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => CheatLikability),
         },
@@ -885,6 +1238,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "衣装変更を有効化（要再起動）",
             Desc     = "衣装変更 UI とパッチを有効化します。\nOFF→ON でパッチ適用が必要なため、変更は再起動後に反映されます。\n",
+            Group    = "基本設定",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => CostumeChangerEnabled),
         },
@@ -893,6 +1247,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "ゲーム指定衣装を優先",
             Desc     = "試着室などゲームが特定の衣装を強制するシーンでは MOD 側の衣装変更を一時停止します。\nゲーム内のイベントと衣装の競合を防げます。\n",
+            Group    = "基本設定",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => RespectGameCostumeOverride),
         },
@@ -901,6 +1256,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "衣装変更状態を保存する",
             Desc     = "Wardrobe で変更した衣装の状態を保存し、ゲーム再起動後も復元します。\nOFF にすると以降の変更は保存されません（既存の保存内容は残るため、ON に戻すと復元されます）。\nSteam Cloud 対象外。\n",
+            Group    = "基本設定",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => PersistCostumeOverrides),
         },
@@ -909,6 +1265,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "ストッキング 押出し量 (m)",
             Desc     = "水着+ストッキング適用時、ストッキングを肌よりどれだけ外側に出すかを指定します（メートル）。\n値を増やすと水着の食い込みが再現できますが、ストッキングが水着を貫通します。0 で無効。\n",
+            Group    = "水着・ストッキング",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -921,6 +1278,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "ストッキング 肌押込み量 (m)",
             Desc     = "水着+ストッキング適用時、肌をストッキングよりどれだけ内側に押し込むかを指定します（メートル）。\n肌のチラつき（肌とストッキングの干渉）が見える場合に大きくしてください。\nただし水着の食い込み演出は弱まります。0 で無効。\n",
+            Group    = "水着・ストッキング",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -933,6 +1291,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "ストッキング 肌押込み フェード半径 (m)",
             Desc     = "肌の押し込みを、上半身などとの境界で滑らかにフェードさせる距離です（メートル）。\n境界に段差が見える場合に大きくしてください。0 で無効（境界無視で一様に押し込む）。\n",
+            Group    = "水着・ストッキング",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -945,6 +1304,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "ストッキング 肌形状フェード半径 (m)",
             Desc     = "ストッキング由来の肌形状補正を、ウエストなどの境界で滑らかにフェードさせる距離です（メートル）。\n境界の段差が気になる場合に大きくしてください。0 で無効（補正は全身一様）。\n",
+            Group    = "水着・ストッキング",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -957,6 +1317,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "上衣 距離保存 検索範囲 (m)",
             Desc     = "別キャラ上衣を当てたときの体型補正の有効範囲です（メートル）。\n小さくするとワンピース型衣装の下半身が補正されず、大きくしすぎると\n服から遠い箇所まで体に張り付いて不自然になります。\n",
+            Group    = "上衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0.01f,
             SliderMax  = 0.5f,
@@ -969,6 +1330,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "上衣 肌からの最小距離 (m)",
             Desc     = "元キャラ側で衣装が肌にめり込んでいる箇所を補正する安全マージンです（メートル）。\n当てた服の一部が肌にめり込んで見える場合に大きくしてください。\n0 で無効（めり込みは未補正のまま反映されます）。\n",
+            Group    = "上衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -981,6 +1343,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "上衣 肌サンプル半径 (m)",
             Desc     = "体型補正で参照する肌のサンプリング半径です（メートル）。\n鎖骨・肩甲骨など凹凸の多い箇所で補正がばらつく場合に大きくしてください。\n0 で最小近傍 3 点を使用。\n",
+            Group    = "上衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.1f,
@@ -993,6 +1356,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "上衣 肌 weight 転送 falloff (m)",
             Desc     = "関節を曲げたときに肌密着部の服が肌から剥離・突き抜けないよう、\n肌の動きに追随させる範囲です（メートル）。\n肩・肘などで服が肌から浮いて見える場合に大きくしてください。\n0 で無効。推奨初期値: 0.020 m。\n",
+            Group    = "上衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.05f,
@@ -1003,8 +1367,48 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
+            Label    = "重ね着時 胸 押し出し (m)",
+            Desc     = "水着など全身衣装に上着を重ね、かつ胸サイズを縮めた重ね着のときだけ効く設定です（メートル）。\n重ねた上着の胸まわりを肌から離す向きに押し出し、胸が上着を突き抜けるのを防ぎます。\n突き抜けが見える場合に少しずつ大きくしてください。0 で無効（従来どおり）。\n通常の上下分かれた衣装では使われません（そちらは肌側の押し込みで補正）。\n補正は距離保存の平滑化を通るため、押し出し量は設定値より小さく出ます\n（設定値=実際の押し出し量ではありません）。突き抜けが消える値に合わせてください。\n",
+            Group    = "上衣 (別キャラ移植)",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.03f,
+            SliderStep = 0.001f,
+            Format     = "{0:F4}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => TopsAdditiveBreastPushOut, 0.001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "距離保存 平滑化 反復回数",
+            Desc     = "距離保存で衣装を体型に追従させた際の補正量 (disp) を、衣装メッシュ上で近傍平均する反復回数です。\n胸 flat 時の native 上着・別キャラ上衣の移植いずれにも効きます。\n多いほど表面のガタつき (逆距離² サンプリングの高周波ノイズ) が滑らかになりますが、\n増やしすぎると衣装のディテール (襞・カップの稜線) が鈍ります。0 で平滑化無効 (距離保存の生の結果)。\n",
+            Group    = "上衣 (別キャラ移植)",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 10f,
+            SliderStep = 1f,
+            Format     = "{0}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.IntAccessor(() => DistancePreserveSmoothIterations, 1f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "距離保存 平滑化 寄せ率",
+            Desc     = "距離保存 平滑化の 1 反復あたり近傍平均への寄せ率。0.0 で平滑化無効、1.0 で最大。\nガタつきが残るなら上げ、衣装のディテールが鈍るなら下げます。\n",
+            Group    = "上衣 (別キャラ移植)",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => DistancePreserveSmoothStrength, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
             Label    = "上衣 肌押込み量 (m)",
             Desc     = "別キャラ上衣を当てたとき、肌が服を貫通する箇所を内側に押し込む距離です（メートル）。\n肌のチラつき（肌と服の干渉）が見える場合に大きくしてください。0 で無効。\n",
+            Group    = "上衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -1017,6 +1421,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "上衣 肌押込み フェード半径 (m)",
             Desc     = "肌の押し込みを、顔・首回りで滑らかにフェードさせる距離です（メートル）。\n首元で押し込みが顔まで波及する場合に大きくしてください。\n0 で無効（顔境界無視で一様に押し込む）。\n",
+            Group    = "上衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -1029,6 +1434,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "上衣 肌押込み cloth サンプル半径 (m)",
             Desc     = "肌押込みの参照範囲です（メートル）。\nフリル・袖などで押し込みがガタつく場合や、ウエストの縫い目で段差が見える場合に\n大きくしてください。0 で 10mm 固定（狭い既定）。\n",
+            Group    = "上衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.1f,
@@ -1041,6 +1447,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "下衣 肌押込み量 (m)",
             Desc     = "別キャラ下衣（スカート等）を当てたとき、肌がスカートを貫通する箇所を内側に押し込む距離です（メートル）。\n腰・腿・膝下のチラつきが見える場合に大きくしてください。\n0 で無効。最大 1cm 制限（過大値で脚が消える事故を防ぐため）。\n",
+            Group    = "下衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -1053,6 +1460,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "下衣 肌押込み フェード半径 (m)",
             Desc     = "肌の押し込みを、顔・首回りで滑らかにフェードさせる距離です（メートル）。\n首元で押し込みが顔まで波及する場合に大きくしてください。\n0 で無効（顔境界無視で一様に押し込む）。\n",
+            Group    = "下衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.01f,
@@ -1065,6 +1473,7 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "下衣 肌押込み skirt サンプル半径 (m)",
             Desc     = "肌押込みの参照範囲です（メートル）。\nスカートのフリルなどで押し込みがガタつく場合や、ウエストの縫い目で段差が見える場合に\n大きくしてください。0 で 10mm 固定（狭い既定）。\n",
+            Group    = "下衣 (別キャラ移植)",
             Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
             SliderMin  = 0f,
             SliderMax  = 0.1f,
@@ -1077,14 +1486,16 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "水着・バニーガール衣装でも下着を表示",
             Desc     = "水着・バニー衣装でもパンツが表示されるようにします（通常はゲーム側の制限で非表示）。\nテクスチャは通常衣装用のため、UV 不一致で見た目が崩れる場合は OFF にしてください。\n",
+            Group    = "下着・その他",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => PantiesAltSlotMatch),
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {
             Category = "CostumeChanger",
-            Label    = "Mod で下着を指定したキャストのみ適用 (OFF で全員)",
+            Label    = "Mod で下着を指定したキャストのみ適用",
             Desc     = "ON  : Mod で下着を選択したキャストのみ適用（他キャストは水着/バニー時に通常通り肌色）。\nOFF : 全キャストに常時適用（水着/バニーでも通常下着が出ます）。\nPantiesAltSlotMatch=OFF のときはこの設定は無視されます。\n",
+            Group    = "下着・その他",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => PantiesAltSlotOverrideOnly),
         },
@@ -1093,8 +1504,430 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Category = "CostumeChanger",
             Label    = "キャストのストッキング(パンスト)を非表示",
             Desc     = "",
+            Group    = "下着・その他",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => DisableStockings),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "上半身肌の腰継ぎ目を元の体型に合わせる",
+            Desc     = "上着・水着・胸平坦化で上半身肌 (mesh_skin_upper) を共通体型(Babydoll)に差し替えたとき、\n腰の継ぎ目だけ元の体型のボーン追従と位置に戻して、下半身肌との継ぎ目のズレ（動いたときの段差・\n静的な隙間）を抑えます。腰回りでズレや隙間が出る場合は ON のままにしてください。OFF で従来動作。\n",
+            Group    = "上半身肌 継ぎ目",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => SkinUpperSeamConform),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "腰継ぎ目 conform 近接距離 (m)",
+            Desc     = "上半身肌のうち、共通体型(Babydoll)の下半身肌との距離がこの値（メートル）以内の継ぎ目頂点だけを\n元の体型のボーン追従へ戻します。胸など下半身肌から離れた部分は触らず平坦化を保ちます。\n継ぎ目の段差が残る場合は少し大きくしてください。上半身肌の腰継ぎ目 conform が OFF のときは無効。\n",
+            Group    = "上半身肌 継ぎ目",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0.001f,
+            SliderMax  = 0.02f,
+            SliderStep = 0.001f,
+            Format     = "{0:F3}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => SkinUpperSeamConformDist, 0.001f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "胸 flat smoothing 半径 (m)",
+            Desc     = "胸を潰す Laplacian relaxation の近傍半径 (mesh-local m)。各頂点をこの半径内の頂点の平均位置へ寄せます。\n大きいほど 1 反復で広く平均し速く平らになりますが処理負荷が増加します。0 で flatten 無効。\n",
+            Group    = "共通設定",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.2f,
+            SliderStep = 0.005f,
+            Format     = "{0:F4}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => BreastFlattenSmoothRadius, 0.005f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "胸 flat 反復回数",
+            Desc     = "胸を潰す Laplacian relaxation の反復回数。回数を増やすほど深く沈んで平らになります。\n0 で flatten 無効。SmoothRadius を近傍半径に使うため SmoothRadius=0 でも無効。\nSmoothRadius が小さいと近傍を拾えず効きが弱くなります。\n",
+            Group    = "共通設定",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 5f,
+            SliderStep = 1f,
+            Format     = "{0}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.IntAccessor(() => BreastFlattenSmoothIterations, 1f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "胸 flat 寄せ率",
+            Desc     = "Laplacian relaxation の 1 反復あたり近傍平均への寄せ率。0.0 で flatten 無効、1.0 で最大。\n実効強度は頂点ごとの flat 量 (amount×breast weight) で重み付けされ、胸領域外は不動。\n",
+            Group    = "共通設定",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => BreastFlattenSmoothStrength, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "胸 flat 谷間沈め",
+            Desc     = "BreastFlatten 時、左右の胸の谷間 (cleavage) で衣装が平らな body の上に浮くのを抑えます。\ndistance-preserve が保つ「元の丸い胸との距離」を谷間でのみ縮め、衣装を body へ引き下ろします。\n0.0 で従来挙動（縮めない）、1.0 で谷間の衣装を肌へ最大まで沈めます。\n",
+            Group    = "共通設定",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => BreastFlattenCleavageShrink, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "胸 flat 谷間幅",
+            Desc     = "谷間沈めを効かせる左右の幅。胸の中心間隔に対する比率で、大きいほど胸寄りまで沈めます。\nBreastFlattenCleavageShrink が 0 のときは無効。\n",
+            Group    = "共通設定",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1.5f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => BreastFlattenCleavageWidth, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "胸 flat 下半身衣装を保護",
+            Desc     = "全身が 1 枚メッシュの衣装 (水着・バニー等) で胸を潰すとき、下半身側の衣装が一緒に\n変形するのを抑えます。腰のラインから下は元の形のまま据え置きます。OFF で従来動作。\n",
+            Group    = "共通設定",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => BreastFlattenLowerFade),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "胸 flat 下半身保護のフェード幅 (m)",
+            Desc     = "下半身衣装の保護を腰のラインから上へどれだけの幅で滑らかに切り替えるか (mesh-local m)。\n0 で腰のラインちょうどで二値的に切り替え。大きいほど境界がなだらかになります。\n胸 flat 下半身衣装を保護が OFF のときは無効。\n",
+            Group    = "共通設定",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 0.2f,
+            SliderStep = 0.005f,
+            Format     = "{0:F3}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => BreastFlattenLowerFadeWidth, 0.005f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 量",
+            Desc     = "花奈 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。\n",
+            Group    = "花奈",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => KanaBreastFlatten, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 揺れ抑制倍率",
+            Desc     = "花奈 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。\n1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。\nflat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。\n",
+            Group    = "花奈",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => KanaBreastWeightShift, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "揺れ度倍率",
+            Desc     = "花奈 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。\n",
+            Group    = "花奈",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => KanaBreastJiggle, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "慣性倍率",
+            Desc     = "花奈 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。\n",
+            Group    = "花奈",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => KanaBreastInertia, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 量",
+            Desc     = "凜 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。\n",
+            Group    = "凜",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => RinBreastFlatten, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 揺れ抑制倍率",
+            Desc     = "凜 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。\n1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。\nflat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。\n",
+            Group    = "凜",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => RinBreastWeightShift, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "揺れ度倍率",
+            Desc     = "凜 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。\n",
+            Group    = "凜",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => RinBreastJiggle, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "慣性倍率",
+            Desc     = "凜 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。\n",
+            Group    = "凜",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => RinBreastInertia, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 量",
+            Desc     = "美羽香 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。\n",
+            Group    = "美羽香",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => MiukaBreastFlatten, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 揺れ抑制倍率",
+            Desc     = "美羽香 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。\n1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。\nflat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。\n",
+            Group    = "美羽香",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => MiukaBreastWeightShift, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "揺れ度倍率",
+            Desc     = "美羽香 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。\n",
+            Group    = "美羽香",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => MiukaBreastJiggle, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "慣性倍率",
+            Desc     = "美羽香 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。\n",
+            Group    = "美羽香",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => MiukaBreastInertia, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 量",
+            Desc     = "英梨紗 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。\n",
+            Group    = "英梨紗",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => ErisaBreastFlatten, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 揺れ抑制倍率",
+            Desc     = "英梨紗 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。\n1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。\nflat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。\n",
+            Group    = "英梨紗",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => ErisaBreastWeightShift, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "揺れ度倍率",
+            Desc     = "英梨紗 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。\n",
+            Group    = "英梨紗",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => ErisaBreastJiggle, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "慣性倍率",
+            Desc     = "英梨紗 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。\n",
+            Group    = "英梨紗",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => ErisaBreastInertia, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 量",
+            Desc     = "黒音 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。\n",
+            Group    = "黒音",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => KuonBreastFlatten, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 揺れ抑制倍率",
+            Desc     = "黒音 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。\n1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。\nflat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。\n",
+            Group    = "黒音",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => KuonBreastWeightShift, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "揺れ度倍率",
+            Desc     = "黒音 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。\n",
+            Group    = "黒音",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => KuonBreastJiggle, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "慣性倍率",
+            Desc     = "黒音 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。\n",
+            Group    = "黒音",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => KuonBreastInertia, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 量",
+            Desc     = "瑠那 の胸 flat 量。0.0 で元 / 1.0 で完全 flat。\n",
+            Group    = "瑠那",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => LunaBreastFlatten, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "flat 揺れ抑制倍率",
+            Desc     = "瑠那 の胸 flat 時、潰した胸の揺れを Spine3 へ逃がして抑える強さ（flat 量に対する倍率）。\n1.0 で最大抑制（従来の挙動）、下げるほど胸の揺れが残ります。0.0 で抑制なし。既定 0.8。\nflat 量が 0 のときは無効。揺れを残すほど衣装が肌を突き抜けやすくなります。\n",
+            Group    = "瑠那",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 1f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => LunaBreastWeightShift, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "揺れ度倍率",
+            Desc     = "瑠那 の胸の揺れの強さ。1.0 で標準、2.0 でよく揺れる（大振幅）、0.5 で揺れにくい（小振幅）、0.0 で完全停止。\n",
+            Group    = "瑠那",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => LunaBreastJiggle, 0.05f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Breast",
+            Label    = "慣性倍率",
+            Desc     = "瑠那 の胸の慣性の強さ。1.0 で標準、0.0 で慣性を無視します。大きくしても一定値で頭打ちになります。\n",
+            Group    = "瑠那",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0f,
+            SliderMax  = 2f,
+            SliderStep = 0.05f,
+            Format     = "{0:F2}",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => LunaBreastInertia, 0.05f),
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {

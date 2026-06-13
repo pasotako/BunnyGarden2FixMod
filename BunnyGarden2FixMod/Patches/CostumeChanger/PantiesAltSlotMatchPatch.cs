@@ -178,7 +178,9 @@ public static class PantiesAltSlotMatchPatch
                 .FirstOrDefault(x => x != null && x.name == "mesh_skin_lower");
             if (lower == null) return;
 
-            var materials = lower.materials;
+            // v1.0.4 でゲーム側が setupPantiesMesh を .sharedMaterials ベースに統一した
+            // (インスタンス生成を避ける方針) ため、復元も .sharedMaterials で揃える。
+            var materials = lower.sharedMaterials;
             if (entry.SlotIndex < 0 || entry.SlotIndex >= materials.Length)
             {
                 PatchLogger.LogDebug($"[PantiesAltSlotMatch] restore skip (slot OOB): char={id}, slot={entry.SlotIndex}, mat.Length={materials.Length}");
@@ -191,7 +193,7 @@ public static class PantiesAltSlotMatchPatch
             PatchLogger.LogDebug($"[PantiesAltSlotMatch] restore: char={id}, slot={entry.SlotIndex}, before='{beforeName}', after='{entry.Material.name}', sharedMesh='{meshName}', mat.Length={materials.Length}");
 
             materials[entry.SlotIndex] = entry.Material;
-            lower.materials = materials;
+            lower.sharedMaterials = materials;
             s_originalCache.Remove(id);
         }
         catch (Exception ex)

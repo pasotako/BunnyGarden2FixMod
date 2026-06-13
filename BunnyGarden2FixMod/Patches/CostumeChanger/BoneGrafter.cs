@@ -160,7 +160,7 @@ internal static class BoneGrafter
     /// 遅延されるため、同フレーム内で <see cref="ResolveAndGraft"/> が再走査すると doomed clone を
     /// 拾い「既に存在する」と誤判定して新規 graft をスキップ → donor SMR.bones が destroy 予定の
     /// Transform を参照したまま frame end で dangling refs となり表示崩壊する
-    /// （TopsLoader.OnDistancePreserveParamChanged の同フレーム Restore→Apply 経路で発火）。
+    /// （CostumeReflectionCoordinator.ReflectChar の同フレーム Restore→Apply 経路で発火）。
     /// </summary>
     public static void DestroyGrafted(GameObject character, string ownerTag = null)
     {

@@ -113,9 +113,9 @@ internal static class MagicaClothRebuilder
     public static void ClearAllSnapshots() => s_snapshots.Clear();
 
     /// <summary>
-    /// BottomsLoader が SwapSmr / hide / CaptureSnapshotIfFirst で SMR.sharedMesh を捕獲する前に呼び、
-    /// target の各 active MagicaCloth が SMR に書き込んだ customMesh を originalMesh (build 時 cache asset)
-    /// に戻しておく。これで BottomsLoader が捕獲する snap.OriginalMesh が stable な Mesh asset になり、
+    /// BottomsLoader が SwapSmr / hide / NativeSmrRegistry.GetOrCapture で SMR.sharedMesh の native を確定する
+    /// 前に呼び、target の各 active MagicaCloth が SMR に書き込んだ customMesh を originalMesh (build 時
+    /// cache asset) に戻しておく。これで Registry が捕獲する native が stable な Mesh asset になり、
     /// 後続の rebuild で customMesh が dispose されても dangling reference にならない (Restore 時に
     /// SMR.sharedMesh=null 状態で BuildAndRun が失敗するのを防ぐ)。
     /// </summary>

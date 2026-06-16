@@ -1,5 +1,11 @@
 # BunnyGarden2FixMod
 
+<div align="right">
+
+[![日本語](https://img.shields.io/badge/日本語-ff69b4?style=flat-square)](README.md)&nbsp;[![English](https://img.shields.io/badge/English-lightgrey?style=flat-square)](README.en.md)
+
+</div>
+
 [バニーガーデン2](https://store.steampowered.com/app/3443820/2/)(海外名:Bunny Garden2)用の解像度修正やフレームレート上限変更などを行うBepInEx5用Modです。
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b4e45f40-5420-4811-8500-4a0c3b4d1e69" />
 <img width="1920" height="1000" alt="スクリーンショット 2026-04-16 191718-e" src="https://github.com/user-attachments/assets/f6c86e6b-2ad5-4b5f-bfa8-6ff66fcaf43b" />
@@ -21,6 +27,8 @@
 - F9キーで旅行・特別なシーンの所持金UI、ボタンガイド、ラブカウンターを非表示にできる。(所持金非表示はデフォルトで有効)
 - 色収差エフェクト（画面端のにじみ）を無効化できる。(デフォルトでは無効)
 - 胸の形状を平坦化するオプション。キャラクターごとに調整可能。(デフォルトでは無効)
+
+MOD 独自の UI（F9 設定パネル・衣装チェンジャー等）は、ゲームの言語設定（日本語／英語／簡体字／繁体字）に自動で追従します。言語の追加は下記「[翻訳（多言語対応）](#翻訳多言語対応)」を参照してください。
 
 ## 導入方法(Steam Deckも対応)
 1. [Releases](https://github.com/kazumasa200/BunnyGarden2FixMod/releases/latest)から最新のzipファイルをダウンロードする。(BunnyGarden2FixMod_v1.0.6.1_BepInEx5.zipみたいな感じ)ブラウザによってはブロックするかもしれないので注意。<br>導入時の最新バージョンを入れてください。
@@ -60,6 +68,22 @@
 ## Tips
 
 - **F4キー** でゲーム起動中に設定ファイルをリロードできます。設定ファイルを変更した後、ゲームを再起動する必要はありません（F4キーを押すのみ）。
+
+## 翻訳（多言語対応）
+
+MOD の UI は日本語（内蔵）と英語を同梱しており、ゲームの言語設定に応じて自動で切り替わります。
+
+**ビルド不要**で翻訳の追加・上書きができます。次の場所に外部言語ファイルを置いてください:
+
+```
+BepInEx/plugins/BunnyGarden2FixMod/lang/<code>.json
+```
+
+- `<code>` は `en` / `zhCN` / `zhtw` のいずれか（`ja` は内蔵の既定）。
+- ファイルは「元の日本語文字列 → 訳文」のフラットな JSON 辞書です。キーが無い場合は日本語にフォールバックします。
+- 外部ファイルは同梱訳より優先されるため、既存訳の微修正にも使えます。
+
+`zhCN.json` / `zhtw.json` など他言語の Pull Request も歓迎です。
 
 ## 開発者向け: Config / ホットキーの追加方法
 <details>

@@ -328,6 +328,8 @@ public class CostumePickerController : MonoBehaviour
 
     private void OpenFor(CharID charId)
     {
+        // 開くたびに最新のゲーム言語を解決して UI 文字列の訳を選び直す（多言語対応, issue #52）。
+        Loc.Refresh();
         // CanOpen() が m_visibleCastsBuf を同フレームで既に更新済みなので直接コピー
         m_visibleCasts.Clear();
         m_visibleCasts.AddRange(m_visibleCastsBuf);
@@ -822,9 +824,9 @@ public class CostumePickerController : MonoBehaviour
         2 => "White Pansto",
         3 => "Black Fishnet",
         4 => "White Fishnet",
-        5 => "瑠那のニーハイ",
-        6 => "黒ニーハイ",
-        7 => "白ニーハイ",
+        5 => Loc.Tr("瑠那のニーハイ"),
+        6 => Loc.Tr("黒ニーハイ"),
+        7 => Loc.Tr("白ニーハイ"),
         _ => $"#{type}",
     };
 
@@ -1416,7 +1418,7 @@ public class CostumePickerController : MonoBehaviour
         try
         {
             bool ok = await ConfirmDialogHelper.ShowYesNoAsync(
-                "解放状態を初期化しますか？\n（上書き中の衣装も既定に戻ります）",
+                Loc.Tr("解放状態を初期化しますか？\n（上書き中の衣装も既定に戻ります）"),
                 this.GetCancellationTokenOnDestroy());
             if (!ok) return;
             await ExecuteReset(id);
@@ -1434,7 +1436,7 @@ public class CostumePickerController : MonoBehaviour
         try
         {
             bool ok = await ConfirmDialogHelper.ShowYesNoAsync(
-                "このキャラの全衣装・パンツ・ストッキングを解放しますか？",
+                Loc.Tr("このキャラの全衣装・パンツ・ストッキングを解放しますか？"),
                 this.GetCancellationTokenOnDestroy());
             if (!ok) return;
             ExecuteUnlockAll(id);

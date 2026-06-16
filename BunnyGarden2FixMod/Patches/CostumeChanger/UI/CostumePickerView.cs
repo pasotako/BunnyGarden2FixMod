@@ -140,7 +140,7 @@ public partial class CostumePickerView : MonoBehaviour
         headerRow.style.flexShrink = 0;
         headerRow.style.alignItems = Align.Center;
         m_panel.Add(headerRow);
-        m_headerText = UITFactory.CreateLabel("衣装変更", 13, UITTheme.Text.Accent, m_font, TextAnchor.MiddleLeft);
+        m_headerText = UITFactory.CreateLabel(Loc.Tr("衣装変更"), 13, UITTheme.Text.Accent, m_font, TextAnchor.MiddleLeft);
         m_headerText.style.flexShrink = 0;
         m_headerText.style.marginRight = 6;
         headerRow.Add(m_headerText);

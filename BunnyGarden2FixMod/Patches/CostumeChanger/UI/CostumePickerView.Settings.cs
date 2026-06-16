@@ -80,7 +80,7 @@ public partial class CostumePickerView
     private void BuildSettingsContent()
     {
         m_resetAllButton = UITFactory.CreateButton(
-            "解放状態を初期化",
+            Loc.Tr("解放状態を初期化"),
             () => OnResetAllClicked?.Invoke(),
             12, m_font);
         m_resetAllButton.style.marginTop = 12;
@@ -90,7 +90,7 @@ public partial class CostumePickerView
         m_settingsContent.Add(m_resetAllButton);
 
         m_unlockAllButton = UITFactory.CreateButton(
-            "すべて解放",
+            Loc.Tr("すべて解放"),
             () => OnUnlockAllClicked?.Invoke(),
             12, m_font);
         m_unlockAllButton.style.marginBottom = 4;
@@ -99,8 +99,8 @@ public partial class CostumePickerView
         m_settingsContent.Add(m_unlockAllButton);
 
         m_unlockAllNote = UITFactory.CreateLabel(
-            "※ このキャラのGoodEndを見ると有効になります\n" +
-            "どうしてもアンロックしたい場合はコンフィグのCostumeChanger設定タブから強制解除を有効にしてください。",
+            Loc.Tr("※ このキャラのGoodEndを見ると有効になります\n" +
+            "どうしてもアンロックしたい場合はコンフィグのCostumeChanger設定タブから強制解除を有効にしてください。"),
             9, UITTheme.Text.Secondary, m_font, TextAnchor.UpperLeft);
         m_unlockAllNote.style.whiteSpace = WhiteSpace.Normal;
         m_settingsContent.Add(m_unlockAllNote);

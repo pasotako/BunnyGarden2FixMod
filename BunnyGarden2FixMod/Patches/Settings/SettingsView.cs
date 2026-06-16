@@ -34,6 +34,9 @@ public class SettingsView : MonoBehaviour
     private int m_selectedRowIndex = 0;
     private readonly List<RowHandle> m_currentRows = new();
 
+    // ヘッダ（タイトル＋操作ヒント）。多言語対応のため Show() 時に再生成する。
+    private VisualElement m_header;
+
     // キャプチャ中ヒント表示用 Label（BuildPanel で生成、非表示で待機）
     private Label m_captureHintLabel;
 
@@ -120,22 +123,8 @@ public class SettingsView : MonoBehaviour
         // テキスト上部が見切れる。header を flex-shrink:0 で保護し、超過分は body のみに吸収させる。
         header.style.flexShrink = 0;
 
-        var title = new Label("FixMod 設定");
-        title.style.color = new Color(0.84f, 0.87f, 0.91f, 1f);
-        title.style.fontSize = 13;
-        if (m_font != null) title.style.unityFont = m_font;
-        header.Add(title);
-
-        var hints = new UITKeyCapRow();
-        hints.Setup(new (string, string)[]
-        {
-            ("F9",    "閉じる"),
-            ("↑↓",   "移動"),
-            ("←→",   "値"),
-            ("Space", "切替"),
-            ("Tab",   "カテゴリ"),
-        }, m_font);
-        header.Add(hints);
+        m_header = header;
+        PopulateHeader(); // タイトル＋ヒント。多言語対応のため Show() でも再生成する。
         m_root.Add(header);
 
         // ── 本体 (sidebar + content) ─────────
@@ -256,7 +245,7 @@ public class SettingsView : MonoBehaviour
         m_root.Add(m_tooltipLabel);
 
         // キャプチャ中ヒント: パネル下端に固定表示。StartKeyCapture で表示、解除時に非表示。
-        m_captureHintLabel = new Label("任意のキーを押してください  Esc=キャンセル / BS,Del=未割当");
+        m_captureHintLabel = new Label(Loc.Tr("任意のキーを押してください  Esc=キャンセル / BS,Del=未割当"));
         m_captureHintLabel.style.color = new Color(1f, 0.85f, 0.4f, 1f); // 黄色系ヒント色
         m_captureHintLabel.style.fontSize = 10;
         m_captureHintLabel.style.paddingTop = 4;
@@ -335,7 +324,7 @@ public class SettingsView : MonoBehaviour
             btn.style.paddingTop = 6;
             btn.style.paddingBottom = 6;
 
-            var nameLabel = new Label(m_categories[i]);
+            var nameLabel = new Label(Loc.Tr(m_categories[i]));
             nameLabel.style.color = new Color(0.84f, 0.87f, 0.91f, 1f);
             nameLabel.style.fontSize = 11;
             nameLabel.style.flexGrow = 1;
@@ -452,7 +441,7 @@ public class SettingsView : MonoBehaviour
 
         // ── ページ下部にリセットボタン ──────────────
         var resetBtn = new UITButton();
-        resetBtn.Setup("初期値に戻す", () => ResetCurrentCategory(), m_font);
+        resetBtn.Setup(Loc.Tr("初期値に戻す"), () => ResetCurrentCategory(), m_font);
         resetBtn.SetVariant(UITButton.Variant.Subtle);
         resetBtn.style.marginTop = 12;
         resetBtn.style.alignSelf = Align.Center;
@@ -512,7 +501,7 @@ public class SettingsView : MonoBehaviour
         // Unity UI Toolkit の tooltip プロパティは BepInEx ランタイムでは表示されないため自前管理する
         if (!string.IsNullOrEmpty(entry.Desc))
         {
-            var desc = entry.Desc;
+            var desc = Loc.Tr(entry.Desc);
             row.RegisterCallback<MouseEnterEvent>(evt =>
             {
                 m_tooltipShowTimer?.Pause();
@@ -531,7 +520,7 @@ public class SettingsView : MonoBehaviour
         if (entry.Kind == UIKind.Toggle)
         {
             var sw = new UITSwitch();
-            sw.Setup(entry.Label, entry.Accessor.GetFloat() >= 0.5f, m_font);
+            sw.Setup(Loc.Tr(entry.Label), entry.Accessor.GetFloat() >= 0.5f, m_font);
             sw.OnValueChanged += v => entry.Accessor.SetFloat(v ? 1f : 0f);
             // row の paddingLeft=8/Right=8 帯は UITSwitch が覆わないため、その細い余白クリックも
             // 取りこぼさないよう row 側で Toggle を呼ぶ。UITSwitch 内クリックは sw 自身が処理済み
@@ -543,7 +532,7 @@ public class SettingsView : MonoBehaviour
         else if (entry.Kind == UIKind.Dropdown)
         {
             var dd = new UITDropdown();
-            dd.Setup(entry.Label, entry.DropdownOptions, m_font);
+            dd.Setup(Loc.Tr(entry.Label), entry.DropdownOptions, m_font);
             // EnumAccessor.GetFloat() は Enum.GetValues 上の index を返す。
             dd.SetIndex((int)Math.Round(entry.Accessor.GetFloat()));
             dd.OnValueChanged += i => entry.Accessor.SetFloat(i);
@@ -555,7 +544,7 @@ public class SettingsView : MonoBehaviour
         else if (entry.Kind == UIKind.KeyBinding)
         {
             // ── ラベル ──
-            var label = new Label(entry.Label);
+            var label = new Label(Loc.Tr(entry.Label));
             label.style.color = new Color(0.84f, 0.87f, 0.91f, 1f);
             label.style.fontSize = 11;
             label.style.flexGrow = 1;
@@ -623,7 +612,7 @@ public class SettingsView : MonoBehaviour
             Func<float, string> formatter = entry.Accessor is IntAccessor
                 ? (v => string.Format(entry.Format, (int)Math.Round(v)))
                 : (v => string.Format(entry.Format, v));
-            sl.Setup(entry.Label, entry.SliderMin, entry.SliderMax, m_font, formatter);
+            sl.Setup(Loc.Tr(entry.Label), entry.SliderMin, entry.SliderMax, m_font, formatter);
             // SetValue は m_suppressEvents により OnValueChanged を発火させない安全な初期値設定
             sl.SetValue(entry.Accessor.GetFloat());
             // F9 パネルではスライダー上のホイールで値を変えず、ScrollView のスクロールに使う。
@@ -661,7 +650,7 @@ public class SettingsView : MonoBehaviour
         if (m_font != null) arrow.style.unityFont = m_font;
         header.Add(arrow);
 
-        var name = new Label(group);
+        var name = new Label(Loc.Tr(group));
         name.style.color = new Color(0.84f, 0.87f, 0.91f, 1f);
         name.style.fontSize = 11;
         name.style.flexGrow = 1;
@@ -691,9 +680,39 @@ public class SettingsView : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// ヘッダ（タイトル＋操作ヒント）を現在言語で生成する。BuildPanel は Awake 時に走り Loc 未解決の
+    /// ことがあるため、Show() でも再生成して言語を反映する。
+    /// </summary>
+    private void PopulateHeader()
+    {
+        if (m_header == null) return;
+        m_header.Clear();
+
+        var title = new Label(Loc.Tr("FixMod 設定"));
+        title.style.color = new Color(0.84f, 0.87f, 0.91f, 1f);
+        title.style.fontSize = 13;
+        if (m_font != null) title.style.unityFont = m_font;
+        m_header.Add(title);
+
+        var hints = new UITKeyCapRow();
+        hints.Setup(new (string, string)[]
+        {
+            ("F9",    Loc.Tr("閉じる")),
+            ("↑↓",   Loc.Tr("移動")),
+            ("←→",   Loc.Tr("値")),
+            ("Space", Loc.Tr("切替")),
+            ("Tab",   Loc.Tr("カテゴリ")),
+        }, m_font);
+        m_header.Add(hints);
+    }
+
     public void Show()
     {
         if (m_root == null) return;
+        // 開くたびに最新のゲーム言語を解決して UI 文字列の訳を選び直す（多言語対応, issue #52）。
+        Loc.Refresh();
+        PopulateHeader(); // ヘッダは Awake 構築時に Loc 未解決のことがあるため開く度に再生成する。
         // PanelSettings.scale は Awake 時の値を保持するため、開く度に Configs.UIScale を反映する。
         if (m_settings != null) m_settings.scale = Configs.UIScale.Value;
         // 毎回先頭カテゴリ・先頭行から開始する。

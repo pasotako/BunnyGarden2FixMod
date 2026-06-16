@@ -59,6 +59,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\settings.png" />
     <EmbeddedResource Include="Resources\arrow-big-left.png" />
+    <EmbeddedResource Include="Resources\lang\en.json" />
   </ItemGroup>
 
   <!-- BepInEx 5 用パッケージ -->

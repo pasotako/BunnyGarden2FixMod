@@ -342,6 +342,24 @@
       ui:
         kind: toggle
 
+    - name: GambleAlwaysJackpotEnabled
+      label: ギャンブルでジャックポット確定（チート）
+      key: GambleAlwaysJackpot
+      type: bool
+      default: false
+      description: ギャンブルのボーナス（ペカリ）演出が必ず発生し、毎回ジャックポット額を獲得します。
+      ui:
+        kind: toggle
+
+    - name: GambleFastDirectionEnabled
+      label: ギャンブルの演出を高速再生（チート）
+      key: GambleFastForwardDirection
+      type: bool
+      default: false
+      description: ギャンブル実行時の当落演出を 20 倍速で再生し、結果画面まで素早く進みます。
+      ui:
+        kind: toggle
+
     - name: CheatLikability
       label: 好感度ヒント表示
       key: Likability

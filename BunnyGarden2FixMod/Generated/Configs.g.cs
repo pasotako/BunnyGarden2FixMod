@@ -69,6 +69,10 @@ public static class Configs
     public static ConfigEntry<bool> UltimateSurvivorEnabled;
     /// <summary>ギャンブルで負けなくなる（チート）</summary>
     public static ConfigEntry<bool> GambleAlwaysWinEnabled;
+    /// <summary>ギャンブルでジャックポット確定（チート）</summary>
+    public static ConfigEntry<bool> GambleAlwaysJackpotEnabled;
+    /// <summary>ギャンブルの演出を高速再生（チート）</summary>
+    public static ConfigEntry<bool> GambleFastDirectionEnabled;
     /// <summary>好感度ヒント表示</summary>
     public static ConfigEntry<bool> CheatLikability;
     /// <summary>バニー系ドリンクを常時メニューに追加</summary>
@@ -393,6 +397,16 @@ F1 で編集モードを開始し、数字キー（1〜6）でキャストを選
         GambleAlwaysWinEnabled = cfg.Bind("Cheat", "GambleAlwaysWin",
             false,
             @"ギャンブルで負けなくなる（チート）");
+
+        GambleAlwaysJackpotEnabled = cfg.Bind("Cheat", "GambleAlwaysJackpot",
+            false,
+            @"ギャンブルでジャックポット確定（チート）
+ギャンブルのボーナス（ペカリ）演出が必ず発生し、毎回ジャックポット額を獲得します。");
+
+        GambleFastDirectionEnabled = cfg.Bind("Cheat", "GambleFastForwardDirection",
+            false,
+            @"ギャンブルの演出を高速再生（チート）
+ギャンブル実行時の当落演出を 20 倍速で再生し、結果画面まで素早く進みます。");
 
         CheatLikability = cfg.Bind("Cheat", "Likability",
             false,
@@ -1216,6 +1230,22 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => GambleAlwaysWinEnabled),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Cheat",
+            Label    = "ギャンブルでジャックポット確定（チート）",
+            Desc     = "ギャンブルのボーナス（ペカリ）演出が必ず発生し、毎回ジャックポット額を獲得します。",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => GambleAlwaysJackpotEnabled),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Cheat",
+            Label    = "ギャンブルの演出を高速再生（チート）",
+            Desc     = "ギャンブル実行時の当落演出を 20 倍速で再生し、結果画面まで素早く進みます。",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => GambleFastDirectionEnabled),
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {

@@ -129,6 +129,9 @@ public static class GambleAlwaysWinPatch
     public static int RerollIfNeeded(int winAmount)
     {
         if (!Configs.GambleAlwaysWinEnabled.Value) return winAmount;
+        // ジャックポット確定が有効なときは、そちらが pekari でプラス賞金を保証するため
+        // この「負けなくする」再抽選は無効化する（二重適用を避ける）。
+        if (Configs.GambleAlwaysJackpotEnabled.Value) return winAmount;
         if (winAmount >= 0) return winAmount;
 
         var gamble = Object.FindFirstObjectByType<Gamble>();

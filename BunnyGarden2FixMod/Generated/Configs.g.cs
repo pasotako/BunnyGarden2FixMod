@@ -73,6 +73,8 @@ public static class Configs
     public static ConfigEntry<bool> GambleAlwaysJackpotEnabled;
     /// <summary>ギャンブルの演出を高速再生（チート）</summary>
     public static ConfigEntry<bool> GambleFastDirectionEnabled;
+    /// <summary>日付の進行を止める（チート・ベータ）</summary>
+    public static ConfigEntry<bool> StopTimeProgressionEnabled;
     /// <summary>好感度ヒント表示</summary>
     public static ConfigEntry<bool> CheatLikability;
     /// <summary>バニー系ドリンクを常時メニューに追加</summary>
@@ -409,6 +411,15 @@ F1 で編集モードを開始し、数字キー（1〜6）でキャストを選
             false,
             @"ギャンブルの演出を高速再生（チート）
 ギャンブル実行時の当落演出を 20 倍速で再生し、結果画面まで素早く進みます。");
+
+        StopTimeProgressionEnabled = cfg.Bind("Cheat", "StopTimeProgression",
+            false,
+            @"日付の進行を止める（チート・ベータ）
+【ベータ機能】不具合が残っている可能性があります。
+ON にすると一日を終えても日付（ゲーム内カレンダー）が進まなくなります。
+同じ日を繰り返して好感度・お金稼ぎなどに余裕を持って取り組めます。
+ただし終盤のイベントや衣装デーなど日付に依存して進むものは、
+進めたいときに OFF へ戻してから日を進めてください。");
 
         CheatLikability = cfg.Bind("Cheat", "Likability",
             false,
@@ -1256,6 +1267,14 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Desc     = "ギャンブル実行時の当落演出を 20 倍速で再生し、結果画面まで素早く進みます。",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => GambleFastDirectionEnabled),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Cheat",
+            Label    = "日付の進行を止める（チート・ベータ）",
+            Desc     = "【ベータ機能】不具合が残っている可能性があります。\nON にすると一日を終えても日付（ゲーム内カレンダー）が進まなくなります。\n同じ日を繰り返して好感度・お金稼ぎなどに余裕を持って取り組めます。\nただし終盤のイベントや衣装デーなど日付に依存して進むものは、\n進めたいときに OFF へ戻してから日を進めてください。\n",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => StopTimeProgressionEnabled),
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {

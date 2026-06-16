@@ -360,6 +360,20 @@
       ui:
         kind: toggle
 
+    - name: StopTimeProgressionEnabled
+      label: 日付の進行を止める（チート・ベータ）
+      key: StopTimeProgression
+      type: bool
+      default: false
+      description: |
+        【ベータ機能】不具合が残っている可能性があります。
+        ON にすると一日を終えても日付（ゲーム内カレンダー）が進まなくなります。
+        同じ日を繰り返して好感度・お金稼ぎなどに余裕を持って取り組めます。
+        ただし終盤のイベントや衣装デーなど日付に依存して進むものは、
+        進めたいときに OFF へ戻してから日を進めてください。
+      ui:
+        kind: toggle
+
     - name: CheatLikability
       label: 好感度ヒント表示
       key: Likability

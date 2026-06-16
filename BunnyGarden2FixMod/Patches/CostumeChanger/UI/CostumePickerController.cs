@@ -1570,9 +1570,17 @@ public class CostumePickerController : MonoBehaviour
     /// <summary>
     /// FittingRoom と同じ条件でキャラの GoodEnd クリア状況を判定する。
     /// （Assembly-CSharp/GB.Extra/Album.cs の enterFittingRoom と同じマッピング）
+    /// <para>
+    /// <see cref="Configs.CostumeUnlockIgnoreRouteClear"/> が有効なときはクリア状況を無視して
+    /// 常に true を返し、未クリアのキャラでも「すべて解放」を使えるようにする（issue #48）。
+    /// この 1 メソッドで「すべて解放」ボタンの実行・キー操作ハイライト・グレーアウト表示の
+    /// 3 経路すべてのゲートを解除する。
+    /// </para>
     /// </summary>
     private static bool IsEndingClearedFor(CharID id)
     {
+        if (Configs.CostumeUnlockIgnoreRouteClear.Value) return true;
+
         int routeIndex = id switch
         {
             CharID.KANA => 0,

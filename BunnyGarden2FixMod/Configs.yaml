@@ -433,6 +433,20 @@
       ui:
         kind: toggle
 
+    - name: CostumeUnlockIgnoreRouteClear
+      label: 未クリアキャラの衣装も解放可能にする
+      group: 基本設定
+      key: UnlockIgnoreRouteClear
+      type: bool
+      default: false
+      description: |
+        Wardrobe 設定タブの「すべて解放」を、エンディング未クリアのキャストにも使えるようにします。
+        既定（OFF）ではゲーム本来どおり該当キャラのルートをクリアするまで「すべて解放」は使えません
+        （1 周目はバニラの印象で遊んでほしいという配慮）。
+        ON にすると未クリアのキャラでも全衣装・パンツ・ストッキングを解放できます。
+      ui:
+        kind: toggle
+
     - name: PersistCostumeOverrides
       label: 衣装変更状態を保存する
       group: 基本設定

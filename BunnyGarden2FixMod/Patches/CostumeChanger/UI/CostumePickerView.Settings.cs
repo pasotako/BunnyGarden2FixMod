@@ -59,6 +59,10 @@ public partial class CostumePickerView
             m_unlockAllButton.SetEnabled(data.UnlockAllEnabled);
             m_unlockAllButton.style.opacity = data.UnlockAllEnabled ? 1f : 0.4f;
         }
+        // 「すべて解放」が有効なとき（新トグル ON もしくはクリア済み）は案内文言を隠す。
+        // 無効なときだけ「GoodEnd を見ると有効」＋「強制解除の案内」を表示する。
+        if (m_unlockAllNote != null)
+            m_unlockAllNote.style.display = data.UnlockAllEnabled ? DisplayStyle.None : DisplayStyle.Flex;
     }
 
     /// <summary>
@@ -95,7 +99,8 @@ public partial class CostumePickerView
         m_settingsContent.Add(m_unlockAllButton);
 
         m_unlockAllNote = UITFactory.CreateLabel(
-            "※ このキャラのGoodEndを見ると有効になります",
+            "※ このキャラのGoodEndを見ると有効になります\n" +
+            "どうしてもアンロックしたい場合はコンフィグのCostumeChanger設定タブから強制解除を有効にしてください。",
             9, UITTheme.Text.Secondary, m_font, TextAnchor.UpperLeft);
         m_unlockAllNote.style.whiteSpace = WhiteSpace.Normal;
         m_settingsContent.Add(m_unlockAllNote);

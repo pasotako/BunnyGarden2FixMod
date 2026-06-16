@@ -81,6 +81,8 @@ public static class Configs
     public static ConfigEntry<bool> CostumeChangerEnabled;
     /// <summary>ゲーム指定衣装を優先</summary>
     public static ConfigEntry<bool> RespectGameCostumeOverride;
+    /// <summary>未クリアキャラの衣装も解放可能にする</summary>
+    public static ConfigEntry<bool> CostumeUnlockIgnoreRouteClear;
     /// <summary>衣装変更状態を保存する</summary>
     public static ConfigEntry<bool> PersistCostumeOverrides;
     /// <summary>水着+ストッキング適用</summary>
@@ -436,6 +438,14 @@ OFF→ON でパッチ適用が必要なため、変更は再起動後に反映�
             @"ゲーム指定衣装を優先
 試着室などゲームが特定の衣装を強制するシーンでは MOD 側の衣装変更を一時停止します。
 ゲーム内のイベントと衣装の競合を防げます。");
+
+        CostumeUnlockIgnoreRouteClear = cfg.Bind("CostumeChanger", "UnlockIgnoreRouteClear",
+            false,
+            @"未クリアキャラの衣装も解放可能にする
+Wardrobe 設定タブの「すべて解放」を、エンディング未クリアのキャストにも使えるようにします。
+既定（OFF）ではゲーム本来どおり該当キャラのルートをクリアするまで「すべて解放」は使えません
+（1 周目はバニラの印象で遊んでほしいという配慮）。
+ON にすると未クリアのキャラでも全衣装・パンツ・ストッキングを解放できます。");
 
         PersistCostumeOverrides = cfg.Bind("CostumeChanger", "PersistCostumeOverrides",
             true,
@@ -1280,6 +1290,15 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Group    = "基本設定",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => RespectGameCostumeOverride),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "CostumeChanger",
+            Label    = "未クリアキャラの衣装も解放可能にする",
+            Desc     = "Wardrobe 設定タブの「すべて解放」を、エンディング未クリアのキャストにも使えるようにします。\n既定（OFF）ではゲーム本来どおり該当キャラのルートをクリアするまで「すべて解放」は使えません\n（1 周目はバニラの印象で遊んでほしいという配慮）。\nON にすると未クリアのキャラでも全衣装・パンツ・ストッキングを解放できます。\n",
+            Group    = "基本設定",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => CostumeUnlockIgnoreRouteClear),
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {

@@ -43,6 +43,7 @@ public partial class CostumePickerView
 
     public void ShowSettings(SettingsData data)
     {
+        RebuildIfLanguageChanged();
         EnsureBuilt();
         ApplyUIScale();
         m_panel.style.display = DisplayStyle.Flex;

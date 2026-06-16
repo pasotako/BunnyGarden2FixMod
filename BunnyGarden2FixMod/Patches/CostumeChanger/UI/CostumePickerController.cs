@@ -330,6 +330,12 @@ public class CostumePickerController : MonoBehaviour
     {
         // 開くたびに最新のゲーム言語を解決して UI 文字列の訳を選び直す（多言語対応, issue #52）。
         Loc.Refresh();
+        // ゲーム言語が変わっていたら DLC 名キャッシュを破棄し、prefetch で新言語で取り直させる。
+        if (s_dlcNameCacheLang != Loc.CurrentCode)
+        {
+            s_dlcNameCache.Clear();
+            s_dlcNameCacheLang = Loc.CurrentCode;
+        }
         // CanOpen() が m_visibleCastsBuf を同フレームで既に更新済みなので直接コピー
         m_visibleCasts.Clear();
         m_visibleCasts.AddRange(m_visibleCastsBuf);
@@ -665,6 +671,10 @@ public class CostumePickerController : MonoBehaviour
     // HomeScene.showDLCAnnounce と同じ言語インデックス選択をする (FittingRoom は array[0] 直で
     // 多言語が混ざるバグがあるので真似しない)。プロセス永続: DLC は再起動まで不変。
     private static readonly Dictionary<CostumeType, string> s_dlcNameCache = new();
+
+    // DLC 名キャッシュを構築した言語コード。ゲーム言語が変わったらキャッシュを破棄して
+    // 新しい言語で取り直す（多言語対応, issue #52）。
+    private static string s_dlcNameCacheLang;
 
     // 連続 OpenFor で並列 prefetch が走らないようにする in-flight ガード。
     private static bool s_dlcPrefetchInFlight;

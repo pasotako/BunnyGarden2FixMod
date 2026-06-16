@@ -35,6 +35,9 @@ public static class Loc
     private static string s_currentCode = "ja";
     private static Dictionary<string, string> s_current; // null = 日本語（素通し）
 
+    /// <summary>現在解決済みの言語コード（ja/en/zhCN/zhtw）。一度構築した UI の言語変更検出に使う。</summary>
+    public static string CurrentCode => s_currentCode;
+
     /// <summary>
     /// 現在のゲーム言語を読み直し、対応する辞書を選び直す。F9/Picker を開くときに呼ぶ。冪等。
     /// </summary>

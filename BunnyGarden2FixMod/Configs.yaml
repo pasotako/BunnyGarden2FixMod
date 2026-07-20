@@ -360,6 +360,19 @@
       ui:
         kind: toggle
 
+    - name: HorseRacingAlwaysWinEnabled
+      label: 競馬で賭けた馬が必ず勝つ（チート）
+      key: HorseRacingAlwaysWin
+      type: bool
+      default: false
+      description: |
+        競馬イベントで、賭けた馬が勝つようにレース結果を書き換えます（大穴に賭ければ大穴が必ず当たります）。
+        まだ再生されていない実況・着順発表も勝利に合わせて置き換わります。
+        レース中に ON にした場合も、その時点から結果が賭けた馬の勝利へ切り替わります
+        （すでに再生された実況はそのままです）。
+      ui:
+        kind: toggle
+
     - name: StopTimeProgressionEnabled
       label: 日付の進行を止める（チート・ベータ）
       key: StopTimeProgression

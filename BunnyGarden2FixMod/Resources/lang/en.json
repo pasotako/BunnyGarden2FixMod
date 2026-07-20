@@ -230,5 +230,7 @@
   "移動": "Move",
   "値": "Value",
   "切替": "Toggle",
-  "カテゴリ": "Category"
+  "カテゴリ": "Category",
+  "競馬で賭けた馬が必ず勝つ（チート）": "Your horse always wins at horse racing (cheat)",
+  "競馬イベントで、賭けた馬が勝つようにレース結果を書き換えます（大穴に賭ければ大穴が必ず当たります）。\nまだ再生されていない実況・着順発表も勝利に合わせて置き換わります。\nレース中に ON にした場合も、その時点から結果が賭けた馬の勝利へ切り替わります\n（すでに再生された実況はそのままです）。": "Rewrites the race result in the horse racing event so that the horse you bet on wins (bet on the dark horse and it's guaranteed to win).\nAny commentary and result announcements not yet played are also replaced to match the win.\nEven if you turn this ON mid-race, the result switches to your horse's victory from that point on\n(commentary that has already played stays as is)."
 }

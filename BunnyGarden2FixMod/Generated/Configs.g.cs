@@ -73,6 +73,8 @@ public static class Configs
     public static ConfigEntry<bool> GambleAlwaysJackpotEnabled;
     /// <summary>ギャンブルの演出を高速再生（チート）</summary>
     public static ConfigEntry<bool> GambleFastDirectionEnabled;
+    /// <summary>競馬で賭けた馬が必ず勝つ（チート）</summary>
+    public static ConfigEntry<bool> HorseRacingAlwaysWinEnabled;
     /// <summary>日付の進行を止める（チート・ベータ）</summary>
     public static ConfigEntry<bool> StopTimeProgressionEnabled;
     /// <summary>好感度ヒント表示</summary>
@@ -411,6 +413,14 @@ F1 で編集モードを開始し、数字キー（1〜6）でキャストを選
             false,
             @"ギャンブルの演出を高速再生（チート）
 ギャンブル実行時の当落演出を 20 倍速で再生し、結果画面まで素早く進みます。");
+
+        HorseRacingAlwaysWinEnabled = cfg.Bind("Cheat", "HorseRacingAlwaysWin",
+            false,
+            @"競馬で賭けた馬が必ず勝つ（チート）
+競馬イベントで、賭けた馬が勝つようにレース結果を書き換えます（大穴に賭ければ大穴が必ず当たります）。
+まだ再生されていない実況・着順発表も勝利に合わせて置き換わります。
+レース中に ON にした場合も、その時点から結果が賭けた馬の勝利へ切り替わります
+（すでに再生された実況はそのままです）。");
 
         StopTimeProgressionEnabled = cfg.Bind("Cheat", "StopTimeProgression",
             false,
@@ -1267,6 +1277,14 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Desc     = "ギャンブル実行時の当落演出を 20 倍速で再生し、結果画面まで素早く進みます。",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => GambleFastDirectionEnabled),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Cheat",
+            Label    = "競馬で賭けた馬が必ず勝つ（チート）",
+            Desc     = "競馬イベントで、賭けた馬が勝つようにレース結果を書き換えます（大穴に賭ければ大穴が必ず当たります）。\nまだ再生されていない実況・着順発表も勝利に合わせて置き換わります。\nレース中に ON にした場合も、その時点から結果が賭けた馬の勝利へ切り替わります\n（すでに再生された実況はそのままです）。\n",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => HorseRacingAlwaysWinEnabled),
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {

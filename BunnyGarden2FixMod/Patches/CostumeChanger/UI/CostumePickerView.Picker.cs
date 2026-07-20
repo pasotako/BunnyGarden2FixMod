@@ -1,3 +1,4 @@
+using BunnyGarden2FixMod.Utils;
 using GB.Game;
 using System;
 using System.Collections.Generic;
@@ -56,6 +57,7 @@ public partial class CostumePickerView
 
     public void ShowPicker(RenderData data)
     {
+        RebuildIfLanguageChanged();
         EnsureBuilt();
         ApplyUIScale();
         m_panel.style.display = DisplayStyle.Flex;
@@ -87,7 +89,7 @@ public partial class CostumePickerView
 
         if (labels == null || labels.Count == 0)
         {
-            m_listView.ShowEmpty("（履歴なし）");
+            m_listView.ShowEmpty(Loc.Tr("（履歴なし）"));
             return;
         }
 
@@ -108,7 +110,7 @@ public partial class CostumePickerView
     private void BuildPickerContent()
     {
         m_tabStrip = new UITTabStrip();
-        m_tabStrip.Setup(new[] { "衣装", "パンツ", "靴下", "下衣", "上衣" }, m_font);
+        m_tabStrip.Setup(new[] { Loc.Tr("衣装"), Loc.Tr("パンツ"), Loc.Tr("靴下"), Loc.Tr("下衣"), Loc.Tr("上衣") }, m_font);
         m_tabStrip.style.marginBottom = 6;
         m_tabStrip.style.flexShrink = 0;
         m_tabStrip.OnTabClicked += i => OnTabClicked?.Invoke(i);
@@ -125,23 +127,23 @@ public partial class CostumePickerView
         m_pickerContent.Add(footer);
 
         var key1 = new UITKeyCapRow();
-        key1.Setup(new (string, string)[] { ("W", ""), ("S", "選択"), ("A", ""), ("D", "タブ") }, m_font);
+        key1.Setup(new (string, string)[] { ("W", ""), ("S", Loc.Tr("選択")), ("A", ""), ("D", Loc.Tr("タブ")) }, m_font);
         key1.style.marginBottom = 4;
         footer.Add(key1);
 
         var key2 = new UITKeyCapRow();
-        key2.Setup(new (string, string)[] { ("Enter", "適用"), ("R", "Reset"), ("Esc", "閉じる") }, m_font);
+        key2.Setup(new (string, string)[] { ("Enter", Loc.Tr("適用")), ("R", "Reset"), ("Esc", Loc.Tr("閉じる")) }, m_font);
         key2.style.marginBottom = 4;
         footer.Add(key2);
 
         var note = UITFactory.CreateLabel(
-            "※ キーボード操作はカーソルがパネル上のときのみ有効",
+            Loc.Tr("※ キーボード操作はカーソルがパネル上のときのみ有効"),
             9, UITTheme.Text.Secondary, m_font, TextAnchor.UpperLeft);
         note.style.whiteSpace = WhiteSpace.Normal;
         footer.Add(note);
 
         var note2 = UITFactory.CreateLabel(
-            "※ プラグイン有効後に、一度でも着用した衣装に切り替え可能",
+            Loc.Tr("※ プラグイン有効後に、一度でも着用した衣装に切り替え可能"),
             9, UITTheme.Text.Secondary, m_font, TextAnchor.UpperLeft);
         note2.style.whiteSpace = WhiteSpace.Normal;
         footer.Add(note2);

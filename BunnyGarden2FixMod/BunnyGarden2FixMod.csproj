@@ -16,7 +16,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>net.noeleve.BunnyGarden2FixMod</AssemblyName>
     <Product>BunnyGarden2FixMod</Product>
-    <Version>1.0.10</Version>
+    <Version>1.0.11</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
     <RestoreAdditionalProjectSources>
@@ -59,6 +59,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\settings.png" />
     <EmbeddedResource Include="Resources\arrow-big-left.png" />
+    <EmbeddedResource Include="Resources\lang\en.json" />
   </ItemGroup>
 
   <!-- BepInEx 5 用パッケージ -->

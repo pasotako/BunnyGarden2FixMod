@@ -34,6 +34,7 @@ public partial class CostumePickerView : MonoBehaviour
     private PanelSettings m_settings;
     private VisualElement m_root;             // UIDocument.rootVisualElement
     private VisualElement m_panel;            // 角丸パネル（サイド固定）
+    private string m_builtLangCode;           // パネル構築時の言語コード（言語変更検出用）
     private Label m_headerText;
     private Font m_font;
     private Button m_castPrevButton;          // ◀ キャスト切替ボタン
@@ -140,7 +141,7 @@ public partial class CostumePickerView : MonoBehaviour
         headerRow.style.flexShrink = 0;
         headerRow.style.alignItems = Align.Center;
         m_panel.Add(headerRow);
-        m_headerText = UITFactory.CreateLabel("衣装変更", 13, UITTheme.Text.Accent, m_font, TextAnchor.MiddleLeft);
+        m_headerText = UITFactory.CreateLabel(Loc.Tr("衣装変更"), 13, UITTheme.Text.Accent, m_font, TextAnchor.MiddleLeft);
         m_headerText.style.flexShrink = 0;
         m_headerText.style.marginRight = 6;
         headerRow.Add(m_headerText);
@@ -187,6 +188,28 @@ public partial class CostumePickerView : MonoBehaviour
 
         m_panel.style.display = DisplayStyle.None;
         SetMode(ViewMode.Picker);
+
+        // 構築時の言語を記録。再オープン時にゲーム言語が変わっていたら作り直す（多言語対応, issue #52）。
+        m_builtLangCode = Loc.CurrentCode;
+    }
+
+    /// <summary>
+    /// パネルは EnsureBuilt で一度だけ構築・キャッシュされ、ヘッダ/タブ/ボタン/注記などの静的文言は
+    /// 構築時の言語で固定される。開く前に言語が変わっていたらパネルを破棄して作り直すことで反映する。
+    /// ShowPicker / ShowSettings の冒頭から呼ぶ。
+    /// </summary>
+    private void RebuildIfLanguageChanged()
+    {
+        Loc.Refresh();
+        if (m_panel == null) return;            // 未構築なら EnsureBuilt がそのまま現言語で構築する
+        if (m_builtLangCode == Loc.CurrentCode) return; // 同一言語なら作り直し不要
+
+        // 破棄: UIDocument コンポーネントと PanelSettings を destroy し、m_panel=null で EnsureBuilt の再構築を促す。
+        // 各要素フィールド (m_headerText/m_tabStrip 等) は EnsureBuilt の再実行で全て再代入されるため null 化不要。
+        if (m_doc != null) { Destroy(m_doc); m_doc = null; }
+        if (m_settings != null) { Destroy(m_settings); m_settings = null; }
+        m_root = null;
+        m_panel = null;
     }
 
     /// <summary>

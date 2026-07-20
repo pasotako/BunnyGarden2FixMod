@@ -328,6 +328,14 @@ public class CostumePickerController : MonoBehaviour
 
     private void OpenFor(CharID charId)
     {
+        // 開くたびに最新のゲーム言語を解決して UI 文字列の訳を選び直す（多言語対応, issue #52）。
+        Loc.Refresh();
+        // ゲーム言語が変わっていたら DLC 名キャッシュを破棄し、prefetch で新言語で取り直させる。
+        if (s_dlcNameCacheLang != Loc.CurrentCode)
+        {
+            s_dlcNameCache.Clear();
+            s_dlcNameCacheLang = Loc.CurrentCode;
+        }
         // CanOpen() が m_visibleCastsBuf を同フレームで既に更新済みなので直接コピー
         m_visibleCasts.Clear();
         m_visibleCasts.AddRange(m_visibleCastsBuf);
@@ -664,6 +672,10 @@ public class CostumePickerController : MonoBehaviour
     // 多言語が混ざるバグがあるので真似しない)。プロセス永続: DLC は再起動まで不変。
     private static readonly Dictionary<CostumeType, string> s_dlcNameCache = new();
 
+    // DLC 名キャッシュを構築した言語コード。ゲーム言語が変わったらキャッシュを破棄して
+    // 新しい言語で取り直す（多言語対応, issue #52）。
+    private static string s_dlcNameCacheLang;
+
     // 連続 OpenFor で並列 prefetch が走らないようにする in-flight ガード。
     private static bool s_dlcPrefetchInFlight;
 
@@ -822,9 +834,9 @@ public class CostumePickerController : MonoBehaviour
         2 => "White Pansto",
         3 => "Black Fishnet",
         4 => "White Fishnet",
-        5 => "瑠那のニーハイ",
-        6 => "黒ニーハイ",
-        7 => "白ニーハイ",
+        5 => Loc.Tr("瑠那のニーハイ"),
+        6 => Loc.Tr("黒ニーハイ"),
+        7 => Loc.Tr("白ニーハイ"),
         _ => $"#{type}",
     };
 
@@ -1416,7 +1428,7 @@ public class CostumePickerController : MonoBehaviour
         try
         {
             bool ok = await ConfirmDialogHelper.ShowYesNoAsync(
-                "解放状態を初期化しますか？\n（上書き中の衣装も既定に戻ります）",
+                Loc.Tr("解放状態を初期化しますか？\n（上書き中の衣装も既定に戻ります）"),
                 this.GetCancellationTokenOnDestroy());
             if (!ok) return;
             await ExecuteReset(id);
@@ -1434,7 +1446,7 @@ public class CostumePickerController : MonoBehaviour
         try
         {
             bool ok = await ConfirmDialogHelper.ShowYesNoAsync(
-                "このキャラの全衣装・パンツ・ストッキングを解放しますか？",
+                Loc.Tr("このキャラの全衣装・パンツ・ストッキングを解放しますか？"),
                 this.GetCancellationTokenOnDestroy());
             if (!ok) return;
             ExecuteUnlockAll(id);
@@ -1570,9 +1582,17 @@ public class CostumePickerController : MonoBehaviour
     /// <summary>
     /// FittingRoom と同じ条件でキャラの GoodEnd クリア状況を判定する。
     /// （Assembly-CSharp/GB.Extra/Album.cs の enterFittingRoom と同じマッピング）
+    /// <para>
+    /// <see cref="Configs.CostumeUnlockIgnoreRouteClear"/> が有効なときはクリア状況を無視して
+    /// 常に true を返し、未クリアのキャラでも「すべて解放」を使えるようにする（issue #48）。
+    /// この 1 メソッドで「すべて解放」ボタンの実行・キー操作ハイライト・グレーアウト表示の
+    /// 3 経路すべてのゲートを解除する。
+    /// </para>
     /// </summary>
     private static bool IsEndingClearedFor(CharID id)
     {
+        if (Configs.CostumeUnlockIgnoreRouteClear.Value) return true;
+
         int routeIndex = id switch
         {
             CharID.KANA => 0,

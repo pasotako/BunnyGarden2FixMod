@@ -232,5 +232,16 @@
   "切替": "Toggle",
   "カテゴリ": "Category",
   "競馬で賭けた馬が必ず勝つ（チート）": "Your horse always wins at horse racing (cheat)",
-  "競馬イベントで、賭けた馬が勝つようにレース結果を書き換えます（大穴に賭ければ大穴が必ず当たります）。\nまだ再生されていない実況・着順発表も勝利に合わせて置き換わります。\nレース中に ON にした場合も、その時点から結果が賭けた馬の勝利へ切り替わります\n（すでに再生された実況はそのままです）。": "Rewrites the race result in the horse racing event so that the horse you bet on wins (bet on the dark horse and it's guaranteed to win).\nAny commentary and result announcements not yet played are also replaced to match the win.\nEven if you turn this ON mid-race, the result switches to your horse's victory from that point on\n(commentary that has already played stays as is)."
+  "競馬イベントで、賭けた馬が勝つようにレース結果を書き換えます（大穴に賭ければ大穴が必ず当たります）。\nまだ再生されていない実況・着順発表も勝利に合わせて置き換わります。\nレース中に ON にした場合も、その時点から結果が賭けた馬の勝利へ切り替わります\n（すでに再生された実況はそのままです）。": "Rewrites the race result in the horse racing event so that the horse you bet on wins (bet on the dark horse and it's guaranteed to win).\nAny commentary and result announcements not yet played are also replaced to match the win.\nEven if you turn this ON mid-race, the result switches to your horse's victory from that point on\n(commentary that has already played stays as is).",
+  "カラオケ（リズムゲーム）": "Karaoke (Rhythm Game)",
+  "ノーツの動きをなめらかにする": "Smooth note movement",
+  "タンバリン・サイリウムのノーツ位置は本来オーディオ時刻（約 47Hz 刻み）でしか\n更新されず、高フレームレートでもカクついて見えます。\nON にすると FPS 上限（FrameRate）と同じレートで滑らかに更新します（0=無制限のときは 120fps 相当）。\n判定タイミングには影響しません。": "Tambourine / glow stick note positions normally only update on the audio clock (about 47Hz steps),\nso they look choppy even at high frame rates.\nWhen ON, they update smoothly at the same rate as the FPS Limit (FrameRate) setting (0 = unlimited uses 120fps).\nJudgment timing is not affected.",
+  "ハイスピードを有効化": "Enable hi-speed",
+  "ハイスピード倍率": "Hi-speed multiplier",
+  "ハイスピード有効時の倍率。変更は次の曲から反映されます。": "The multiplier when hi-speed is enabled. Changes take effect from the next song.",
+  "流れる速さの BPM 同期を外す": "Decouple scroll speed from BPM",
+  "ノーツの流れる速さを倍率で変更します（判定タイミングは変わりません）。\n1.0 未満で遅く、1.0 より大きくすると速くなります。\n変更は次の曲から反映されます。": "Changes note scroll speed by a multiplier (judgment timing is unchanged).\nBelow 1.0 is slower; above 1.0 is faster.\nChanges take effect from the next song.",
+  "FAST / SLOW 判定表示": "Show FAST / SLOW timing feedback",
+  "ノーツを叩いたタイミングが正確なタイミングより早いと FAST、遅いと SLOW を表示します。\n最高評価（GREAT）のときと、入力しなかった見逃しには表示しません。": "Shows FAST when you hit a note earlier than the exact timing, and SLOW when later.\nNot shown on the top judgment (GREAT) or on misses where you didn't input.",
+  "本来ノーツの流れる速さは曲の BPM に比例します（BPM が速い曲ほどノーツも速い）。\nON にすると全曲の基準速度を「eYe♡とらっかー」と同じ速さに統一します。\nハイスピード倍率はこの基準に対して掛かります。変更は次の曲から反映されます。": "Note scroll speed is normally proportional to the song's BPM (faster BPM songs scroll faster).\nWhen ON, the base speed for every song is unified to the same speed as \"eYe♡tracker\".\nThe hi-speed multiplier applies on top of this base. Changes take effect from the next song."
 }

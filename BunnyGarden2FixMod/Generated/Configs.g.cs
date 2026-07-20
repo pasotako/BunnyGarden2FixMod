@@ -53,6 +53,16 @@ public static class Configs
     public static ConfigEntry<bool> MoreTalkReactions;
     /// <summary>一部モーションでスカートが体にめり込む現象を補正</summary>
     public static ConfigEntry<bool> FixAnimationClipping;
+    /// <summary>ノーツの動きをなめらかにする</summary>
+    public static ConfigEntry<bool> KaraokeNoteSmoothingEnabled;
+    /// <summary>ハイスピードを有効化</summary>
+    public static ConfigEntry<bool> KaraokeHiSpeedEnabled;
+    /// <summary>FAST / SLOW 判定表示</summary>
+    public static ConfigEntry<bool> KaraokeFastSlowEnabled;
+    /// <summary>ハイスピード倍率</summary>
+    public static ConfigEntry<float> KaraokeHiSpeed;
+    /// <summary>流れる速さの BPM 同期を外す</summary>
+    public static ConfigEntry<bool> KaraokeBpmSyncOffEnabled;
     /// <summary>高解像度チェキを有効化</summary>
     public static ConfigEntry<bool> ChekiHighResEnabled;
     /// <summary>チェキ解像度</summary>
@@ -355,6 +365,41 @@ Display2: サブモニター（モニター2台以上のときのみ）");
         FixAnimationClipping = cfg.Bind("Animation", "FixAnimationClipping",
             true,
             @"一部モーションでスカートが体にめり込む現象を補正");
+
+        KaraokeNoteSmoothingEnabled = cfg.Bind("Karaoke", "KaraokeNoteSmoothingEnabled",
+            true,
+            @"ノーツの動きをなめらかにする
+タンバリン・サイリウムのノーツ位置は本来オーディオ時刻（約 47Hz 刻み）でしか
+更新されず、高フレームレートでもカクついて見えます。
+ON にすると FPS 上限（FrameRate）と同じレートで滑らかに更新します（0=無制限のときは 120fps 相当）。
+判定タイミングには影響しません。");
+
+        KaraokeHiSpeedEnabled = cfg.Bind("Karaoke", "KaraokeHiSpeedEnabled",
+            false,
+            @"ハイスピードを有効化
+ノーツの流れる速さを倍率で変更します（判定タイミングは変わりません）。
+1.0 未満で遅く、1.0 より大きくすると速くなります。
+変更は次の曲から反映されます。");
+
+        KaraokeFastSlowEnabled = cfg.Bind("Karaoke", "KaraokeFastSlowEnabled",
+            false,
+            @"FAST / SLOW 判定表示
+ノーツを叩いたタイミングが正確なタイミングより早いと FAST、遅いと SLOW を表示します。
+最高評価（GREAT）のときと、入力しなかった見逃しには表示しません。");
+
+        KaraokeHiSpeed = cfg.Bind("Karaoke", "KaraokeHiSpeed",
+            1.0f,
+            new ConfigDescription(
+                @"ハイスピード倍率
+ハイスピード有効時の倍率。変更は次の曲から反映されます。",
+                new AcceptableValueRange<float>(0.1f, 10.0f)));
+
+        KaraokeBpmSyncOffEnabled = cfg.Bind("Karaoke", "KaraokeBpmSyncOffEnabled",
+            false,
+            @"流れる速さの BPM 同期を外す
+本来ノーツの流れる速さは曲の BPM に比例します（BPM が速い曲ほどノーツも速い）。
+ON にすると全曲の基準速度を「eYe♡とらっかー」と同じ速さに統一します。
+ハイスピード倍率はこの基準に対して掛かります。変更は次の曲から反映されます。");
 
         ChekiHighResEnabled = cfg.Bind("Cheki", "HighResEnabled",
             false,
@@ -1188,6 +1233,50 @@ FastForward ホットキー押下中の Time.timeScale 倍率。",
             Desc     = "",
             Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
             Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => FixAnimationClipping),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Karaoke",
+            Label    = "ノーツの動きをなめらかにする",
+            Desc     = "タンバリン・サイリウムのノーツ位置は本来オーディオ時刻（約 47Hz 刻み）でしか\n更新されず、高フレームレートでもカクついて見えます。\nON にすると FPS 上限（FrameRate）と同じレートで滑らかに更新します（0=無制限のときは 120fps 相当）。\n判定タイミングには影響しません。\n",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => KaraokeNoteSmoothingEnabled),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Karaoke",
+            Label    = "ハイスピードを有効化",
+            Desc     = "ノーツの流れる速さを倍率で変更します（判定タイミングは変わりません）。\n1.0 未満で遅く、1.0 より大きくすると速くなります。\n変更は次の曲から反映されます。\n",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => KaraokeHiSpeedEnabled),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Karaoke",
+            Label    = "FAST / SLOW 判定表示",
+            Desc     = "ノーツを叩いたタイミングが正確なタイミングより早いと FAST、遅いと SLOW を表示します。\n最高評価（GREAT）のときと、入力しなかった見逃しには表示しません。\n",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => KaraokeFastSlowEnabled),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Karaoke",
+            Label    = "ハイスピード倍率",
+            Desc     = "ハイスピード有効時の倍率。変更は次の曲から反映されます。",
+            Kind       = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Slider,
+            SliderMin  = 0.1f,
+            SliderMax  = 10f,
+            SliderStep = 0.1f,
+            Format     = "{0:F1}x",
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.FloatAccessor(() => KaraokeHiSpeed, 0.1f),
+        },
+        new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
+        {
+            Category = "Karaoke",
+            Label    = "流れる速さの BPM 同期を外す",
+            Desc     = "本来ノーツの流れる速さは曲の BPM に比例します（BPM が速い曲ほどノーツも速い）。\nON にすると全曲の基準速度を「eYe♡とらっかー」と同じ速さに統一します。\nハイスピード倍率はこの基準に対して掛かります。変更は次の曲から反映されます。\n",
+            Kind     = global::BunnyGarden2FixMod.Patches.Settings.UIKind.Toggle,
+            Accessor = new global::BunnyGarden2FixMod.Patches.Settings.BoolAccessor(() => KaraokeBpmSyncOffEnabled),
         },
         new global::BunnyGarden2FixMod.Patches.Settings.UIEntryMeta
         {

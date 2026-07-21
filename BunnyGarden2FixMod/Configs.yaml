@@ -233,6 +233,64 @@
       ui:
         kind: toggle
 
+- section: Karaoke
+  name: カラオケ（リズムゲーム）
+  configs:
+    - name: KaraokeNoteSmoothingEnabled
+      label: ノーツの動きをなめらかにする
+      type: bool
+      default: true
+      description: |
+        タンバリン・サイリウムのノーツ位置は本来オーディオ時刻（約 47Hz 刻み）でしか
+        更新されず、高フレームレートでもカクついて見えます。
+        ON にすると FPS 上限（FrameRate）と同じレートで滑らかに更新します（0=無制限のときは 120fps 相当）。
+        判定タイミングには影響しません。
+      ui:
+        kind: toggle
+
+    - name: KaraokeHiSpeedEnabled
+      label: ハイスピードを有効化
+      type: bool
+      default: false
+      description: |
+        ノーツの流れる速さを倍率で変更します（判定タイミングは変わりません）。
+        1.0 未満で遅く、1.0 より大きくすると速くなります。
+        変更は次の曲から反映されます。
+      ui:
+        kind: toggle
+
+    - name: KaraokeFastSlowEnabled
+      label: FAST / SLOW 判定表示
+      type: bool
+      default: false
+      description: |
+        ノーツを叩いたタイミングが正確なタイミングより早いと FAST、遅いと SLOW を表示します。
+        最高評価（GREAT）のときと、入力しなかった見逃しには表示しません。
+      ui:
+        kind: toggle
+
+    - name: KaraokeHiSpeed
+      label: ハイスピード倍率
+      type: float
+      default: 1.0
+      range: [0.1, 10.0]
+      description: ハイスピード有効時の倍率。変更は次の曲から反映されます。
+      ui:
+        kind: slider
+        step: 0.1
+        format: '{0:F1}x'
+
+    - name: KaraokeBpmSyncOffEnabled
+      label: 流れる速さの BPM 同期を外す
+      type: bool
+      default: false
+      description: |
+        本来ノーツの流れる速さは曲の BPM に比例します（BPM が速い曲ほどノーツも速い）。
+        ON にすると全曲の基準速度を「eYe♡とらっかー」と同じ速さに統一します。
+        ハイスピード倍率はこの基準に対して掛かります。変更は次の曲から反映されます。
+      ui:
+        kind: toggle
+
 - section: Cheki
   name: チェキ高解像度保存
   configs:
